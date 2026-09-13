@@ -1,0 +1,195 @@
+{
+	"description": "应用页面路由与全局配置。此文件定义了整个应用的页面路由、导航栏、底部标签栏和全局样式配置：pages(定义所有页面路径及其页面级样式配置)、globalStyle(定义全局导航栏样式和背景色)、tabBar(配置底部导航栏的样式和菜单项)、easycom(组件自动引入规则配置)。页面路由按照功能分组，包括认证页面、主功能页面、编辑页面和其他工具页面。",
+
+	/* 页面路由配置 */
+	"pages": [ 
+		/* 主功能页面 */
+		{
+			"_comment": "主功能页面",
+			"path": "pages/index/index",
+			"style": {
+				"navigationBarTitleText": "失物招领",
+				"enablePullDownRefresh": false
+			}
+		},
+		
+		/* 认证相关页面 */
+		{
+			"_comment": "认证相关页面 - 登录",
+			"path": "pages/login/login",
+			"style": {
+				"navigationBarTitleText": "登录",
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"_comment": "认证相关页面 - 注册",
+			"path": "pages/register/register",
+			"style": {
+				"navigationBarTitleText": "注册",
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"_comment": "认证相关页面 - 重置密码",
+			"path": "pages/reset-password/reset-password",
+			"style": {
+				"navigationBarTitleText": "重置密码",
+				"navigationStyle": "custom"
+			}
+		},
+		
+		/* 核心功能页面 */
+		{
+			"_comment": "核心功能页面 - 发布",
+			"path": "pages/publish/publish",
+			"style": {
+				"navigationBarTitleText": "发布"
+			}
+		},
+		{
+			"_comment": "核心功能页面 - 消息列表",
+			"path": "pages/chat/chat-list",
+			"style": {
+				"navigationBarTitleText": "消息"
+			}
+		},
+		{
+			"_comment": "核心功能页面 - 我的",
+			"path": "pages/my/my",
+			"style": {
+				"navigationBarTitleText": "我的"
+			}
+		},
+		{
+			"_comment": "核心功能页面 - 详情",
+			"path": "pages/detail/detail",
+			"style": {
+				"navigationBarTitleText": "详情"
+			}
+		},
+		{
+			"_comment": "核心功能页面 - 聊天",
+			"path": "pages/chat/chat",
+			"style": {
+				"navigationBarTitleText": "聊天"
+			}
+		},
+		
+		/* 辅助功能页面 */
+		{
+			"_comment": "辅助功能页面 - 意见反馈",
+			"path": "pages/feedback/feedback",
+			"style": {
+				"navigationBarTitleText": "意见反馈"
+			}
+		},
+		{
+			"_comment": "辅助功能页面 - 我的发布",
+			"path": "pages/my-publish/my-publish",
+			"style": {
+				"navigationBarTitleText": "我的发布"
+			}
+		},
+		{
+			"_comment": "辅助功能页面 - 公告详情",
+			"path": "pages/announcement/detail",
+			"style": {
+				"navigationBarTitleText": "公告详情"
+			}
+		},
+		{
+			"_comment": "辅助功能页面 - 公告列表",
+			"path": "pages/announcement/list",
+			"style": {
+				"navigationBarTitleText": "公告列表",
+				"enablePullDownRefresh": true
+			}
+		},
+		
+		/* 编辑页面 */
+		{
+			"_comment": "编辑页面 - 失物编辑",
+			"path": "pages/edit/editLostItem",
+			"style": {
+				"navigationBarTitleText": "编辑失物信息",
+				"enablePullDownRefresh": false
+			}
+		},
+		{
+			"_comment": "编辑页面 - 拾物编辑",
+			"path": "pages/edit/editFoundItem",
+			"style": {
+				"navigationBarTitleText": "编辑拾物信息",
+				"enablePullDownRefresh": false
+			}
+		},
+		
+		/* 共用组件页面 */
+		{
+			"_comment": "共用组件页面 - 输入对话框",
+			"path": "pages/common/input-dialog",
+			"style": {
+				"navigationBarTitleText": "输入确认",
+				"navigationStyle": "custom"
+			}
+		}
+	],
+	
+	/* 全局样式配置 */
+	"globalStyle_comment": "全局样式配置，定义应用的导航栏文本样式、背景色等",
+	"globalStyle": {
+		"navigationBarTextStyle": "black",
+		"navigationBarTitleText": "失物招领",
+		"navigationBarBackgroundColor": "#FFFFFF",
+		"backgroundColor": "#F8F8F8"
+	},
+	
+	/* 底部标签栏配置 */
+	"tabBar_comment": "底部标签栏配置，定义底部导航的样式和菜单项",
+	"tabBar": {
+		"color": "#999999",
+		"selectedColor": "#007AFF",
+		"backgroundColor": "#FFFFFF",
+		"borderStyle": "black",
+		"list": [
+			{
+				"pagePath": "pages/index/index",
+				"text": "首页",
+				"iconPath": "static/tabbar/home.png",
+				"selectedIconPath": "static/tabbar/home-active.png"
+			},
+			{
+				"pagePath": "pages/publish/publish",
+				"text": "发布",
+				"iconPath": "static/tabbar/publish.png",
+				"selectedIconPath": "static/tabbar/publish-active.png"
+			},
+			{
+				"pagePath": "pages/chat/chat-list",
+				"text": "消息",
+				"iconPath": "static/tabbar/message.png",
+				"selectedIconPath": "static/tabbar/message-active.png"
+			},
+			{
+				"pagePath": "pages/my/my",
+				"text": "我的",
+				"iconPath": "static/tabbar/my.png",
+				"selectedIconPath": "static/tabbar/my-active.png"
+			}
+		]
+	},
+	
+	/* 统一身份认证路由配置 */
+	"uniIdRouter_comment": "统一身份认证路由配置，管理需要登录的页面",
+	"uniIdRouter": {},
+	
+	/* 组件自动引入规则 */
+	"easycom_comment": "组件自动引入规则，简化组件使用",
+	"easycom": {
+		"autoscan": true,
+		"custom": {
+			"^uni-(.*)": "@dcloudio/uni-ui/lib/uni-$1/uni-$1.vue"
+		}
+	}
+}

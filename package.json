@@ -1,0 +1,17 @@
+{
+  "name": "lost_and_found_user",
+  "version": "1.0.0",
+  "description": "校园失物招领平台用户端（uni-app Vue3）",
+  "private": true,
+  "scripts": {
+    "dev:mp-weixin": "uni -p mp-weixin",
+    "dev:h5": "uni",
+    "build:mp-weixin": "uni build -p mp-weixin",
+    "build:h5": "uni build"
+  },
+  "dependencies": {
+    "@dcloudio/uni-ui": "^1.5.6",
+    "socket.io-client": "^4.7.5",
+    "vuex": "^4.1.0"
+  }
+}

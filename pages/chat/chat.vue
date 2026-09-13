@@ -1,0 +1,1352 @@
+<template>
+  <view class="chat-container">
+    <!-- 聊天内容区域 -->
+    <scroll-view 
+      class="chat-scroll" 
+      scroll-y 
+      :scroll-top="scrollTop"
+      :scroll-into-view="scrollIntoView"
+      @scrolltoupper="loadMoreMessages"
+      upper-threshold="50"
+      v-if="currentUser"
+      :id="'chat-scroll-view'"
+      :scroll-with-animation="false"
+      :enhanced="true"
+      :show-scrollbar="true"
+      enable-back-to-top
+    >
+      <!-- 加载更多提示 -->
+      <view class="loading-more" v-if="hasMoreMessages">
+        <text class="loading-text">{{ isLoadingMore ? '加载中...' : '加载更多...' }}</text>
+      </view>
+      
+      <!-- 消息列表 -->
+      <view class="message-list">
+        <block v-for="(item, index) in messages" :key="index">
+          <!-- 显示时间，如果是第一条消息或者与上一条消息时间间隔超过5分钟 -->
+          <view class="time-divider" v-if="index === 0 || shouldShowTime(item, messages[index-1])">
+            <text class="time-text">{{ formatTimeForDivider(item.timestamp) }}</text>
+          </view>
+          
+          <!-- 消息项 -->
+          <view
+            class="message-item"
+            :class="{ 'message-self': isSelfMessage(item) }"
+            :id="'msg-' + item.id"
+          >
+            <image
+              class="message-avatar"
+              :src="getAvatarUrl(item)"
+              mode="aspectFill"
+            ></image>
+            <view class="message-content-wrapper">
+              <view class="message-bubble">
+                <text class="message-content">{{ item.message }}</text>
+              </view>
+              <!-- 发送状态：仅自己发送的消息显示（发送中/发送失败/已读/未读） -->
+              <text class="message-status" v-if="isSelfMessage(item)">
+                {{ item.is_sending ? '发送中...' : (item.send_failed ? '发送失败' : (item.is_read ? '已读' : '未读')) }}
+              </text>
+            </view>
+          </view>
+        </block>
+      </view>
+      
+      <!-- 底部填充区域，防止消息被输入框遮挡 -->
+      <view class="bottom-padding"></view>
+      
+      <!-- 用于自动滚动的锚点 -->
+      <view id="scroll-bottom" style="height: 1px; width: 100%;"></view>
+    </scroll-view>
+    
+    <!-- 未登录提示 -->
+    <view class="login-tip" v-if="!currentUser">
+      <text>请先登录后再进行聊天</text>
+      <button class="login-btn" @tap="goToLogin">去登录</button>
+    </view>
+    
+    <!-- 输入框区域 -->
+    <view class="input-area" v-if="currentUser">
+      <input 
+        class="message-input" 
+        type="text" 
+        v-model="inputMessage" 
+        placeholder="请输入消息" 
+        confirm-type="send"
+        @confirm="sendMessage"
+        cursor-spacing="10"
+      />
+      <button class="send-btn" @tap="sendMessage">发送</button>
+    </view>
+    
+    <!-- 底部安全区域 -->
+    <view class="safe-area-bottom"></view>
+  </view>
+</template>
+
+<script>
+
+import { mapState, mapGetters, mapMutations } from 'vuex';
+import { checkLogin, goToLogin, formatDate } from '../../utils/common';
+import socketIOService from '@/utils/socketio.js'; // 引入Socket.IO服务
+
+export default {
+  data() {
+    return {
+      targetUserId: null, // 聊天对象ID
+      targetUser: null, // 聊天对象信息
+      targetUserStatus: 'offline', // 聊天对象在线状态
+      messages: [], // 消息列表
+      inputMessage: '', // 输入框内容
+      offset: 0, // 分页偏移量
+      limit: 20, // 每页消息数量
+      hasMoreMessages: false, // 是否有更多历史消息
+      scrollTop: 0, // 滚动位置
+      scrollIntoView: '', // 滚动到指定元素
+      loginChecking: false, // 是否正在检查登录状态
+      defaultAvatarUrl: '/static/logo.png', // 默认头像
+      isActiveChat: false, // 当前页面是否活跃
+      initialScrollDone: false, // 是否已完成初始滚动
+      isLoadingMore: false // 是否正在加载更多消息
+    };
+  },
+  
+  computed: {
+    ...mapState({
+      currentUser: state => state.userInfo // 当前登录用户信息
+    })
+  },
+  
+  onLoad(options) {
+    // 获取目标用户ID
+    if (options.user_id) {
+      this.targetUserId = options.user_id;
+      
+      // 设置当前活跃聊天对象到socketio服务
+      socketIOService.setCurrentChatTarget(this.targetUserId);
+    } else {
+      uni.showToast({
+        title: '聊天对象不存在',
+        icon: 'none'
+      });
+      setTimeout(() => {
+        uni.navigateBack();
+      }, 1500);
+      return;
+    }
+    
+    // 设置为活跃聊天界面
+    this.isActiveChat = true;
+    
+    // 检查登录状态并初始化
+    this.checkLoginAndInitialize();
+  },
+  
+  // 页面准备就绪时执行
+  onReady() {
+    // 页面渲染完成，确保滚动到底部
+    this.ensureScrollToBottom();
+  },
+  
+  onUnload() {
+    // 标记为非活跃状态
+    this.isActiveChat = false;
+    
+    // 通知socketio服务页面已非活跃
+    socketIOService.setActiveChatStatus(false);
+    
+    // 离开当前聊天房间（按私聊房间名 chat:a-b 正确退出）
+    if (this.targetUserId) {
+      socketIOService.leaveChatTargetRoom(this.targetUserId);
+    }
+
+    // 清理WebSocket
+    this.cleanupWebSocket();
+  },
+
+  onHide() {
+    // 标记为非活跃状态
+    this.isActiveChat = false;
+
+    // 通知socketio服务页面已非活跃
+    socketIOService.setActiveChatStatus(false);
+
+    // 页面隐藏时也离开聊天房间，防止后台接收消息
+    if (this.targetUserId) {
+      socketIOService.leaveChatTargetRoom(this.targetUserId);
+    }
+    
+    // 清理WebSocket
+    this.cleanupWebSocket();
+  },
+  
+  onShow() {
+    // 标记为活跃状态
+    this.isActiveChat = true;
+    
+    // 确保socketio服务知道当前聊天对象
+    if (this.targetUserId) {
+      socketIOService.setCurrentChatTarget(this.targetUserId, this.targetUser);
+    }
+    
+    // 通知socketio服务页面已活跃
+    socketIOService.setActiveChatStatus(true);
+    
+    // 如果用户已登录
+    if (this.currentUser && this.currentUser.id) {
+      // 立即刷新一次消息和重新连接WebSocket
+      this.refreshMessages();
+      
+      // 确保滚动到底部
+      this.ensureScrollToBottom();
+      
+      // 初始化WebSocket
+      this.initWebSocket();
+    } else {
+      // 如果用户未登录，尝试获取用户信息
+      this.checkLoginAndInitialize();
+    }
+    // 添加确保加入正确房间的逻辑
+    if (this.currentUser && this.targetUserId) {
+      // 传入目标用户ID，房间名由 socketio 服务内部生成
+      // （此前误传 "chat:a-b" 房间名，导致生成 room:null 的畸形加房请求）
+      socketIOService.joinChatTargetRoom(this.targetUserId)
+        .then(() => {
+
+        })
+        .catch(error => {
+
+        });
+    }
+  },
+  
+  methods: {
+    // 检查登录状态并初始化
+    async checkLoginAndInitialize() {
+      // 避免重复检查
+      if (this.loginChecking) return;
+      this.loginChecking = true;
+      
+      try {
+        // 检查本地存储中的token
+        const token = uni.getStorageSync('token');
+        if (!token) {
+          this.showLoginTip();
+          this.loginChecking = false;
+          return;
+        }
+        
+        // 如果Vuex中已有用户信息，则直接使用
+        if (this.currentUser && this.currentUser.id) {
+          this.initializeChat();
+        } else {
+          // 尝试从Store中获取用户信息
+          try {
+            await this.$store.dispatch('getUserInfo');
+            
+            // 再次检查用户信息
+            if (this.currentUser && this.currentUser.id) {
+              this.initializeChat();
+            } else {
+              this.showLoginTip();
+            }
+          } catch (userError) {
+            this.showLoginTip();
+          }
+        }
+      } catch (error) {
+        this.showLoginTip();
+      } finally {
+        this.loginChecking = false;
+      }
+    },
+    
+    // 初始化聊天功能
+    initializeChat() {
+      // 重置初始滚动标记
+      this.initialScrollDone = false;
+      
+      // 获取聊天对象信息
+      this.getTargetUserInfo();
+      
+      // 加载聊天记录
+      this.loadChatHistory();
+      
+      // 只有在活跃状态下才连接WebSocket
+      if (this.isActiveChat) {
+        this.initWebSocket();
+      }
+    },
+    
+    // 显示登录提示
+    showLoginTip() {
+      uni.showToast({
+        title: '请先登录',
+        icon: 'none'
+      });
+    },
+    
+    // 加载聊天历史记录
+    async loadChatHistory() {
+      uni.showLoading({
+        title: '加载中...'
+      });
+      
+      try {
+        // 调用API获取聊天记录
+        const res = await this.$api.message.getChatHistory(this.targetUserId, {
+          offset: this.offset,
+          limit: this.limit
+        });
+        
+        if (res && res.messages) {
+          // 设置消息列表
+          this.messages = res.messages.sort((a, b) => {
+            return this.parseTime(a.timestamp) - this.parseTime(b.timestamp);
+          });
+        
+          // 设置是否有更多消息
+          this.hasMoreMessages = res.messages.length >= this.limit;
+          
+          // 标记收到的消息为已读
+          this.markNewMessagesAsRead();
+        
+          // 多次尝试滚动到底部
+          if (this.messages.length > 0) {
+            this.initialScrollAttempts();
+          }
+        }
+        
+        uni.hideLoading();
+      } catch (error) {
+        uni.hideLoading();
+        uni.showToast({
+          title: '加载失败，请稍后再试',
+          icon: 'none'
+        });
+      }
+    },
+    
+    // 初始加载时多次尝试滚动
+    initialScrollAttempts() {
+      // 立即滚动一次
+      if (this.messages.length > 0) {
+        const lastMessage = this.messages[this.messages.length - 1];
+        this.scrollIntoView = `msg-${lastMessage.id}`;
+        this.scrollTop = 999999;
+      }
+      
+      // 延迟多次滚动确保成功
+      this._scrollTimerIds = this._scrollTimerIds || [];
+      const times = [100, 300, 600, 1000, 1500, 2000];
+      times.forEach(time => {
+        const timerId = setTimeout(() => {
+          if (this.messages.length > 0) {
+            // 直接修改scrollTop变量
+            this.scrollTop = 999999 + time; // 加上time确保每次值不同，触发滚动
+            
+            // 交替使用scrollIntoView
+            const lastMessage = this.messages[this.messages.length - 1];
+            if (time % 400 === 0) {
+              this.scrollIntoView = `msg-${lastMessage.id}`;
+            } else {
+              this.scrollIntoView = 'scroll-bottom';
+            }
+            
+            // 使用uni.pageScrollTo辅助滚动
+            uni.pageScrollTo({
+              scrollTop: 999999,
+              duration: 0
+            });
+          }
+        }, time);
+        this._scrollTimerIds.push(timerId);
+      });
+
+      // 标记已完成初始滚动
+      const doneTimerId = setTimeout(() => {
+        this.initialScrollDone = true;
+      }, 2500);
+      this._scrollTimerIds.push(doneTimerId);
+    },
+    
+    // 初始化WebSocket连接
+    initWebSocket() {
+      try {
+        // 检查用户是否已登录
+        if (!this.currentUser || !this.currentUser.id) {
+          return;
+        }
+        
+        // 设置当前页面为活跃状态
+        this.isActiveChat = true;
+        socketIOService.setActiveChatStatus(true);
+        
+        // 添加消息监听
+        socketIOService.addMessageListener(this.handleReceiveMessage);
+        
+        // 添加消息已读状态监听
+        socketIOService.addMessageReadListener(this.handleMessageRead);
+        
+        // 添加用户状态变化监听
+        socketIOService.addUserStatusListener(this.handleUserStatusChange);
+        
+        // 初始化Socket.IO连接
+        socketIOService.initSocket();
+        
+        // 如果有目标用户，加入私聊房间
+        if (this.targetUserId) {
+          // 等待Socket连接完成后再加入房间
+          this._joinRoomIntervalId = setInterval(() => {
+            if (socketIOService.connected) {
+              clearInterval(this._joinRoomIntervalId);
+              this._joinRoomIntervalId = null;
+
+              // 使用Promise方式加入房间
+              socketIOService.joinChatTargetRoom(this.targetUserId)
+                .then(result => {
+                  // 更新通知用户在线状态
+                  socketIOService.notifyUserOnline(this.targetUserId);
+                })
+                .catch(error => {
+                  // 处理错误
+                });
+            }
+          }, 500); // 每500ms检查一次连接状态
+
+          // 设置超时，避免无限等待
+          this._joinRoomTimeoutId = setTimeout(() => {
+            if (this._joinRoomIntervalId) {
+              clearInterval(this._joinRoomIntervalId);
+              this._joinRoomIntervalId = null;
+            }
+            this._joinRoomTimeoutId = null;
+          }, 10000); // 10秒超时
+        }
+      } catch (error) {
+        // 处理错误
+      }
+    },
+    
+    // 清理WebSocket连接
+    cleanupWebSocket() {
+      // 设置当前页面为非活跃状态
+      this.isActiveChat = false;
+      socketIOService.setActiveChatStatus(false);
+
+      // 移除消息监听
+      socketIOService.removeMessageListener(this.handleReceiveMessage);
+
+      // 移除消息已读状态监听
+      socketIOService.removeMessageReadListener(this.handleMessageRead);
+
+      // 移除用户状态变化监听
+      socketIOService.removeUserStatusListener(this.handleUserStatusChange);
+
+      // 清除等待连接的加房轮询定时器，避免页面销毁后回调复活房间
+      if (this._joinRoomIntervalId) {
+        clearInterval(this._joinRoomIntervalId);
+        this._joinRoomIntervalId = null;
+      }
+      if (this._joinRoomTimeoutId) {
+        clearTimeout(this._joinRoomTimeoutId);
+        this._joinRoomTimeoutId = null;
+      }
+
+      // 清除初始滚动的重试定时器
+      if (this._scrollTimerIds && this._scrollTimerIds.length) {
+        this._scrollTimerIds.forEach(id => clearTimeout(id));
+        this._scrollTimerIds = [];
+      }
+
+      // 清空socketio服务中的当前聊天对象
+      socketIOService.clearCurrentChatTarget();
+
+    },
+    
+    // 处理接收到的消息
+    handleReceiveMessage(data) {
+      // 主动隐藏任何可能的toast通知
+      if (uni && uni.hideToast) {
+        uni.hideToast();
+      }
+      
+      // 如果消息不包含必要字段，则忽略
+      if (!data || !data.id || !data.sender_id || !data.receiver_id) {
+        return;
+      }
+      
+      // 检查是否是当前聊天的消息：发送/接收双方必须恰好是 {当前用户, 聊天对象}
+      // （修复：原判断前两个条件重复，且缺少"接收方是自己"的校验）
+      const sid = data.sender_id !== undefined && data.sender_id !== null ? data.sender_id.toString() : '';
+      const rid = data.receiver_id !== undefined && data.receiver_id !== null ? data.receiver_id.toString() : '';
+      const tid = this.targetUserId !== undefined && this.targetUserId !== null ? this.targetUserId.toString() : '';
+      const mid = this.currentUser && this.currentUser.id !== undefined && this.currentUser.id !== null
+        ? this.currentUser.id.toString() : '';
+      const isCurrentChat = !!(tid && mid && ((sid === tid && rid === mid) || (sid === mid && rid === tid)));
+
+      // 不是当前会话的消息直接忽略，绝不能插入当前聊天界面
+      if (!isCurrentChat) {
+        this.updateUnreadCountForUser(data.sender_id);
+        return;
+      }
+
+      // 检查消息是否已经存在于列表中
+      const messageExists = this.messages.some(m => {
+        // 检查固定ID的消息（ID可能是数字或字符串，统一按字符串比较）
+        if (m.id !== undefined && m.id !== null && data.id !== undefined && data.id !== null &&
+            m.id.toString() === data.id.toString()) return true;
+
+        // 检查临时ID消息是否与接收到的消息匹配
+        // 当本地有一个临时ID的消息，且发送者和接收者与服务器消息一致，且内容一致
+        if (m.id && m.id.toString().startsWith('temp-') &&
+            m.sender_id.toString() === data.sender_id.toString() &&
+            m.receiver_id.toString() === data.receiver_id.toString() &&
+            m.message === data.message) {
+
+          // 更新临时消息为服务器返回的消息ID
+          m.id = data.id;
+
+          // 移除发送中状态
+          m.is_sending = false;
+          m.send_failed = false;
+
+          return true;
+        }
+
+        return false;
+      });
+
+      if (!messageExists) {
+        // 添加到消息列表
+        this.messages.push(data);
+
+        // 如果不是自己发的，则标记为已读
+        if (this.currentUser && sid !== mid) {
+          this.markMessageAsRead(data.id, data.sender_id);
+        }
+
+        // 滚动到底部
+        this.scrollToBottom();
+      }
+    },
+    
+    // 处理消息已读通知
+    handleMessageRead(data) {
+      if (!data || !data.message_id) {
+        return;
+      }
+      
+      // 更新消息列表中的已读状态
+      const messageIndex = this.messages.findIndex(m => m.id === data.message_id);
+      if (messageIndex !== -1) {
+        // 更新已读状态
+        this.messages[messageIndex].is_read = true;
+        
+        // 如果有read_at时间，也一并更新
+        if (data.read_at) {
+          this.messages[messageIndex].read_at = data.read_at;
+        }
+      }
+    },
+    
+    // 发送消息
+    async sendMessage() {
+      if (!this.inputMessage.trim()) {
+        return;
+      }
+      
+      // 检查用户是否登录
+      if (!this.currentUser || !this.currentUser.id) {
+        return;
+      }
+      
+      // 取得聊天对象ID
+      const receiverId = this.targetUserId;
+      
+      if (!receiverId) {
+        return;
+      }
+      
+      // 创建本地消息对象
+      const messageText = this.inputMessage.trim();
+      const tempId = 'temp-' + Date.now();
+      
+      const tempMessage = {
+        id: tempId,
+        sender_id: this.currentUser.id,
+        receiver_id: receiverId,
+        message: messageText,
+        timestamp: new Date().toISOString(),
+        is_read: false,
+        is_sending: true, // 标记为正在发送
+        send_failed: false // 是否发送失败
+      };
+      
+      // 添加到本地消息列表
+      this.messages.push(tempMessage);
+      
+      // 清空输入框
+      this.inputMessage = '';
+      
+      // 发送自己的消息时总是滚动到底部
+      this.scrollToBottom();
+      
+      try {
+        // 使用Socket.IO发送消息
+        const socketSuccess = socketIOService.sendMessage(receiverId, messageText);
+
+        // 如果Socket.IO连接不可用，则使用HTTP API发送
+        // （修复：$api 顶层不存在 sendMessage，正确入口是 $api.message.sendMessage）
+        if (!socketSuccess) {
+          const response = await this.$api.message.sendMessage({
+            receiver_id: receiverId,
+            message: messageText
+          });
+          
+          if (response.success) {
+            // 更新临时消息ID为服务器返回的ID
+            const index = this.messages.findIndex(m => m.id === tempId);
+            if (index !== -1) {
+              this.messages[index].id = response.message_id;
+              this.messages[index].is_sending = false; // 发送完成
+            }
+          } else {
+            // 标记为发送失败
+            const index = this.messages.findIndex(m => m.id === tempId);
+            if (index !== -1) {
+              this.messages[index].is_sending = false;
+              this.messages[index].send_failed = true;
+            }
+          }
+        }
+      } catch (error) {
+        // 标记为发送失败
+        const index = this.messages.findIndex(m => m.id === tempId);
+        if (index !== -1) {
+          this.messages[index].is_sending = false;
+          this.messages[index].send_failed = true;
+        }
+      }
+    },
+    
+    // 刷新消息列表 - 仅刷新一次，不使用轮询
+    async refreshMessages() {
+      if (!this.currentUser || !this.targetUserId) return;
+      
+      try {
+        // 调用API获取最新消息
+        const res = await this.$api.message.getChatHistory(this.targetUserId, {
+          offset: 0,
+          limit: 20
+        });
+        
+        if (!res || !res.messages || res.messages.length === 0) return;
+        
+        // 获取当前消息ID集合用于去重
+        const existingMessageIds = new Set(this.messages.map(m => {
+          // 将临时ID的消息排除在外，因为它们将被服务器消息替换
+          if (m.id && typeof m.id === 'string' && m.id.startsWith('temp-')) {
+            return null;
+          }
+          return m.id;
+        }).filter(id => id !== null));
+        
+        // 过滤出新消息
+        const newMessages = res.messages.filter(m => !existingMessageIds.has(m.id));
+        
+        // 处理临时消息的替换
+        newMessages.forEach(newMsg => {
+          // 查找匹配的临时消息
+          const tempMsgIndex = this.messages.findIndex(m => 
+            m.id && typeof m.id === 'string' && m.id.startsWith('temp-') &&
+            m.sender_id.toString() === newMsg.sender_id.toString() &&
+            m.receiver_id.toString() === newMsg.receiver_id.toString() &&
+            m.message === newMsg.message
+          );
+          
+          if (tempMsgIndex !== -1) {
+            // 找到匹配的临时消息，进行替换
+            this.messages.splice(tempMsgIndex, 1);
+          }
+        });
+        
+        if (newMessages.length > 0) {
+          // 为新消息添加发送者头像
+          newMessages.forEach(msg => {
+            if (msg.sender_id.toString() === this.targetUserId.toString() && this.targetUser && this.targetUser.avatar_url) {
+              msg.sender_avatar_url = this.targetUser.avatar_url;
+            }
+          });
+          
+          // 合并消息并按时间排序
+          this.messages = [...this.messages, ...newMessages].sort((a, b) => {
+            return this.parseTime(a.timestamp) - this.parseTime(b.timestamp);
+          });
+          
+          // 标记收到的消息为已读
+          newMessages.forEach(msg => {
+            if (msg.sender_id.toString() === this.targetUserId.toString() && !msg.is_read) {
+              this.markMessageAsRead(msg.id, msg.sender_id);
+            }
+          });
+        }
+      } catch (error) {
+        // 处理错误
+      }
+    },
+    
+    // 加载更多消息（历史记录）
+    async loadMoreMessages() {
+      if (!this.hasMoreMessages || this.isLoadingMore) return;
+      
+      this.isLoadingMore = true; // 标记正在加载更多
+      
+      try {
+        // 更新偏移量
+        this.offset += this.limit;
+        
+        // 调用API获取更多聊天记录
+        const res = await this.$api.message.getChatHistory(this.targetUserId, {
+          offset: this.offset,
+          limit: this.limit
+        });
+        
+        if (res && res.messages && res.messages.length > 0) {
+          // 记录当前第一条消息ID，用于加载后保持位置
+          const firstMsgId = this.messages.length > 0 ? this.messages[0].id : null;
+
+          // 按ID去重后合并（offset 分页期间若有新消息到达，页边界可能重复）
+          const existingIds = new Set(this.messages.map(m => String(m.id)));
+          const olderMessages = res.messages.filter(m => !existingIds.has(String(m.id)));
+
+          // 合并消息并排序
+          this.messages = [...olderMessages, ...this.messages].sort((a, b) => {
+            return this.parseTime(a.timestamp) - this.parseTime(b.timestamp);
+          });
+        
+          // 设置是否有更多消息
+          this.hasMoreMessages = res.messages.length >= this.limit;
+          
+          // 在消息渲染后滚动到之前的位置
+          if (firstMsgId) {
+            this.$nextTick(() => {
+              this.scrollIntoView = `msg-${firstMsgId}`;
+            });
+          }
+        } else {
+          this.hasMoreMessages = false;
+        }
+        
+        this.isLoadingMore = false; // 重置加载状态
+      } catch (error) {
+        // 加载失败回滚偏移量，下次触底重新请求同一页，避免跳页丢消息
+        this.offset = Math.max(0, this.offset - this.limit);
+        this.isLoadingMore = false; // 重置加载状态
+      }
+    },
+    
+    // 滚动到底部
+    scrollToBottom() {
+      if (this.messages.length === 0) return;
+      
+      try {
+        // 使用最后一条消息的ID
+        const lastMessage = this.messages[this.messages.length - 1];
+        this.scrollIntoView = `msg-${lastMessage.id}`;
+        
+        // 设置一个较大的scrollTop值以确保滚动到底部
+        this.scrollTop = 999999;
+        
+        // 页面渲染完毕后再次尝试滚动，确保一定会滚动到底部
+        this.$nextTick(() => {
+          this.scrollTop = 1000000;
+          this.scrollIntoView = 'scroll-bottom';
+        });
+      } catch (error) {
+        // 处理错误
+      }
+    },
+    
+    // 初始加载时滚动到底部
+    initialScrollToBottom() {
+      this.scrollToBottom();
+      
+      // 延迟200ms再次滚动，确保在DOM渲染完成后滚动生效
+      setTimeout(() => {
+        this.scrollToBottom();
+      }, 200);
+    },
+    
+    // 格式化时间显示
+    formatTime(timestamp) {
+      if (!timestamp) return '';
+
+      try {
+        const messageDate = new Date(this.parseTime(timestamp));
+        const now = new Date();
+        
+        // 今天
+        if (messageDate.toDateString() === now.toDateString()) {
+          return formatDate(timestamp, 'HH:mm');
+        }
+        
+        // 昨天
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        if (messageDate.toDateString() === yesterday.toDateString()) {
+          return '昨天 ' + formatDate(timestamp, 'HH:mm');
+        }
+        
+        // 本周内
+        const daysDiff = Math.floor((now - messageDate) / (24 * 60 * 60 * 1000));
+        if (daysDiff < 7) {
+          const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+          return weekdays[messageDate.getDay()] + ' ' + formatDate(timestamp, 'HH:mm');
+        }
+        
+        // 今年内
+        if (messageDate.getFullYear() === now.getFullYear()) {
+          return formatDate(timestamp, 'MM-DD HH:mm');
+        }
+        
+        // 更早
+        return formatDate(timestamp, 'YYYY-MM-DD HH:mm');
+      } catch (error) {
+        return timestamp;
+      }
+    },
+    
+    // 跳转到登录页面
+    goToLogin() {
+      uni.navigateTo({
+        url: '/pages/login/login'
+      });
+    },
+    
+    // 判断消息是否是当前用户发送的（统一转字符串比较，避免 number/string 类型不一致）
+    isSelfMessage(item) {
+      if (!item || item.sender_id === undefined || item.sender_id === null) return false;
+      if (!this.currentUser || this.currentUser.id === undefined || this.currentUser.id === null) return false;
+      return item.sender_id.toString() === this.currentUser.id.toString();
+    },
+
+    // 解析时间戳为毫秒数
+    // 兼容 "YYYY-MM-DD HH:mm:ss"（iOS JSCore 的 new Date 无法解析该格式，会得到 Invalid Date）
+    parseTime(ts) {
+      if (ts instanceof Date) return ts.getTime();
+      if (typeof ts === 'number') return ts;
+      if (typeof ts === 'string' && ts.length) {
+        const normalized = (ts.indexOf('T') === -1 && ts.indexOf('Z') === -1) ? ts.replace(' ', 'T') : ts;
+        const t = new Date(normalized).getTime();
+        return isNaN(t) ? 0 : t;
+      }
+      return 0;
+    },
+
+    // 获取头像URL的方法
+    getAvatarUrl(item) {
+      // 如果是当前用户发送的消息
+      if (this.isSelfMessage(item)) {
+        return this.currentUser.avatar_url || this.defaultAvatarUrl;
+      }
+      
+      // 如果是对方发送的消息
+      // 尝试从消息数据中获取发送者头像
+      if (item.sender && item.sender.avatar_url) {
+        return item.sender.avatar_url;
+      }
+      
+      // 从targetUser获取头像
+      if (this.targetUser && this.targetUser.avatar_url) {
+        return this.targetUser.avatar_url;
+      }
+      
+      // 如果消息包含发送者信息
+      if (item.sender_avatar_url) {
+        return item.sender_avatar_url;
+      }
+      
+      // 默认头像
+      return this.defaultAvatarUrl;
+    },
+    
+    // 获取聊天对象信息
+    async getTargetUserInfo() {
+      if (!this.targetUserId || !this.currentUser) {
+        return;
+      }
+      
+      try {
+        // 从聊天联系人中查找目标用户
+        const contactsRes = await this.$api.message.getChatContacts();
+        
+        if (contactsRes && Array.isArray(contactsRes)) {
+          const targetContact = contactsRes.find(contact => 
+            contact.id.toString() === this.targetUserId.toString() || 
+            contact.user_id?.toString() === this.targetUserId.toString()
+          );
+          
+          if (targetContact) {
+            this.targetUser = targetContact;
+            
+            // 设置页面标题
+            uni.setNavigationBarTitle({
+              title: targetContact.name || targetContact.username || '聊天'
+            });
+            
+            // 更新现有消息中的对方头像
+            this.updateExistingMessagesWithAvatar();
+            
+            // 更新socketio服务中的聊天对象信息
+            socketIOService.setCurrentChatTarget(this.targetUserId, this.targetUser);
+          } else {
+            await this.fetchUserInfoById(this.targetUserId);
+          }
+        }
+      } catch (error) {
+        // 尝试使用备用方式查找用户信息
+        await this.fetchUserInfoById(this.targetUserId);
+      }
+    },
+    
+    // 通过ID获取用户信息（备用方案）
+    async fetchUserInfoById(userId) {
+      try {
+        // 调用API获取用户信息
+        const userInfo = await this.$api.user.getUserById(userId);
+        
+        if (userInfo && userInfo.id) {
+          this.targetUser = {
+            id: userInfo.id,
+            name: userInfo.name || '用户' + userId,
+            avatar_url: userInfo.avatar_url || this.defaultAvatarUrl
+          };
+          
+          // 更新socketio服务中的聊天对象信息
+          socketIOService.setCurrentChatTarget(userId, this.targetUser);
+        } else {
+          // 临时设置targetUser，避免头像显示为空
+          if (!this.targetUser) {
+            this.targetUser = {
+              id: userId,
+              name: '用户' + userId,
+              avatar_url: this.defaultAvatarUrl
+            };
+            
+            // 即使是默认信息，也更新socketio服务中的聊天对象信息
+            socketIOService.setCurrentChatTarget(userId, this.targetUser);
+          }
+        }
+        
+        // 设置页面标题
+        uni.setNavigationBarTitle({
+          title: this.targetUser?.name || '聊天'
+        });
+        
+        // 更新现有消息中的对方头像
+        this.updateExistingMessagesWithAvatar();
+      } catch (error) {
+        // 错误处理，使用默认值
+        if (!this.targetUser) {
+          this.targetUser = {
+            id: userId,
+            name: '用户' + userId,
+            avatar_url: this.defaultAvatarUrl
+          };
+          
+          // 即使是默认信息，也更新socketio服务中的聊天对象信息
+          socketIOService.setCurrentChatTarget(userId, this.targetUser);
+          
+          // 设置页面标题
+          uni.setNavigationBarTitle({
+            title: this.targetUser?.name || '聊天'
+          });
+        }
+      }
+    },
+    
+    // 更新现有消息中的对方头像
+    updateExistingMessagesWithAvatar() {
+      if (!this.targetUser || !this.targetUser.avatar_url || this.messages.length === 0) return;
+      
+      // 给现有的对方消息添加头像信息
+      this.messages.forEach(msg => {
+        if (msg.sender_id.toString() === this.targetUserId.toString() && !msg.sender_avatar_url) {
+          // 添加发送者头像URL
+          msg.sender_avatar_url = this.targetUser.avatar_url;
+        }
+      });
+    },
+    
+    // 判断是否应该显示时间
+    shouldShowTime(currentMsg, prevMsg) {
+      if (!prevMsg) return true;
+
+      // 如果时间差超过5分钟，显示时间
+      return (this.parseTime(currentMsg.timestamp) - this.parseTime(prevMsg.timestamp)) > 5 * 60 * 1000;
+    },
+    
+    // 格式化时间显示 - 仅用于时间分隔线
+    formatTimeForDivider(time) {
+      if (!time) return '';
+
+      try {
+        const messageDate = new Date(this.parseTime(time));
+        const now = new Date();
+        
+        // 今天
+        if (messageDate.toDateString() === now.toDateString()) {
+          return formatDate(time, 'HH:mm');
+        }
+        
+        // 昨天
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        if (messageDate.toDateString() === yesterday.toDateString()) {
+          return '昨天 ' + formatDate(time, 'HH:mm');
+        }
+        
+        // 本周内
+        const daysDiff = Math.floor((now - messageDate) / (24 * 60 * 60 * 1000));
+        if (daysDiff < 7) {
+          const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+          return weekdays[messageDate.getDay()] + ' ' + formatDate(time, 'HH:mm');
+        }
+        
+        // 今年内
+        if (messageDate.getFullYear() === now.getFullYear()) {
+          return formatDate(time, 'MM-DD HH:mm');
+        }
+        
+        // 更早
+        return formatDate(time, 'YYYY-MM-DD HH:mm');
+      } catch (error) {
+        return time;
+      }
+    },
+    
+    // 标记所有新消息为已读
+    markNewMessagesAsRead() {
+      if (!this.currentUser) return;
+      
+      // 找出所有未读的接收消息
+      const unreadMessages = this.messages.filter(msg => 
+        msg.sender_id.toString() === this.targetUserId.toString() && 
+        msg.receiver_id.toString() === this.currentUser.id.toString() && 
+        !msg.is_read
+      );
+      
+      // 逐个标记为已读
+      unreadMessages.forEach(msg => {
+        this.markMessageAsRead(msg.id, msg.sender_id);
+      });
+    },
+    
+    // 标记消息为已读
+    markMessageAsRead(messageId, senderId) {
+      if (!messageId) {
+        return;
+      }
+      
+      if (!this.currentUser || !this.currentUser.id) {
+        return;
+      }
+      
+      if (!senderId) {
+        // 尝试从消息列表中找到发送者ID
+        const message = this.messages.find(m => m.id === messageId);
+        if (message && message.sender_id) {
+          senderId = message.sender_id;
+        } else {
+          return;
+        }
+      }
+      
+      // 检查确认消息是发给当前用户的
+      const message = this.messages.find(m => m.id === messageId);
+      if (message && message.receiver_id.toString() !== this.currentUser.id.toString()) {
+        return;
+      }
+      
+      // 如果消息已经标记为已读则跳过
+      if (message && message.is_read) {
+        return;
+      }
+      
+      // 在消息列表中更新状态
+      const index = this.messages.findIndex(m => m.id === messageId);
+      if (index !== -1) {
+        this.messages[index].is_read = true;
+      }
+      
+      // 首先使用Socket.IO通知
+      const notificationSent = socketIOService.sendMessageReadNotification({
+        message_id: messageId,
+        sender_id: senderId
+      });
+      
+      if (!notificationSent) {
+        // 如果Socket.IO通知失败，则使用HTTP API
+        try {
+          this.$api.message.markAsRead(messageId)
+            .then(response => {
+              // 处理响应
+            })
+            .catch(error => {
+              // 处理错误
+            });
+        } catch (error) {
+          // 处理错误
+        }
+      }
+    },
+    
+    // 更新未读消息数量
+    updateUnreadCountForUser(userId) {
+      // 实现更新未读消息数量的逻辑
+      // 移除显示收到新消息的通知
+      /* 
+      uni.showToast({
+        title: '收到新消息',
+        icon: 'none'
+      });
+      */
+    },
+    
+    // 确保滚动到底部的方法 - 使用于onShow和onReady
+    ensureScrollToBottom() {
+      if (this.messages && this.messages.length > 0) {
+        // 初始加载时滚动到底部
+        this.initialScrollToBottom();
+      }
+    },
+    
+    // 添加用户状态变化处理方法
+    handleUserStatusChange(data) {
+      if (!data || !data.user_id) {
+        return;
+      }
+      
+      // 检查是否是当前聊天对象的状态变化
+      if (this.targetUserId && data.user_id.toString() === this.targetUserId.toString()) {
+        // 更新状态
+        this.targetUserStatus = data.status || 'offline';
+        
+        // 更新页面标题，添加在线状态
+        if (this.targetUser) {
+          const title = this.targetUser.name || this.targetUser.username || '聊天';
+          const statusText = this.targetUserStatus === 'online' ? ' (在线)' : '';
+          
+          uni.setNavigationBarTitle({
+            title: title + statusText
+          });
+        }
+      }
+    }
+  }
+};
+</script>
+
+<style lang="scss">
+.chat-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #ededed;
+  box-sizing: border-box;
+  position: relative;
+  padding-bottom: 80rpx; /* 从100rpx减少到80rpx */
+}
+
+.chat-header {
+  padding: 20rpx;
+  background-color: #fff;
+  border-bottom: 1px solid #eee;
+  text-align: center;
+}
+
+.chat-title {
+  font-size: 34rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.chat-scroll {
+  flex: 1;
+  padding: 15rpx 20rpx; /* 减少上下padding */
+  background-color: #ededed;
+  width: 100%;
+  box-sizing: border-box;
+  padding-bottom: 0; /* 将底部内边距从5rpx减少到0 */
+  height: calc(100vh - 100rpx); /* 调整为新的输入区域高度 */
+}
+
+.loading-more {
+  text-align: center;
+  padding: 10rpx 0;
+}
+
+.loading-text {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.message-list {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 底部填充区域，防止消息被输入框遮挡 */
+.bottom-padding {
+  height: 30rpx; /* 将底部填充高度从90rpx减少到30rpx */
+  width: 100%;
+}
+
+/* 时间分隔线 */
+.time-divider {
+  text-align: center;
+  margin: 20rpx 0; /* 减少时间分隔线的上下margin */
+}
+
+.time-text {
+  display: inline-block;
+  padding: 6rpx 16rpx;
+  font-size: 24rpx;
+  color: #999;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 8rpx;
+}
+
+.message-item {
+  display: flex;
+  margin-bottom: 16rpx; /* 稍微减少消息项之间的间距 */
+  position: relative;
+  width: 100%;
+  align-items: flex-start;
+  box-sizing: border-box;
+}
+
+.message-self {
+  flex-direction: row-reverse;
+}
+
+.message-avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background-color: #e1e1e1;
+  flex-shrink: 0;
+  margin: 0 15rpx;
+}
+
+.message-content-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: calc(100% - 110rpx); /* 留出头像的空间 */
+}
+
+.message-self .message-content-wrapper {
+  align-items: flex-end;
+}
+
+.message-bubble {
+  max-width: 100%;
+  padding: 18rpx 24rpx; /* 稍微减少气泡内部padding */
+  border-radius: 10rpx;
+  margin: 0 5rpx;
+  position: relative;
+  background-color: #fff;
+  word-break: break-all;
+  box-shadow: 0 1rpx 2rpx rgba(0, 0, 0, 0.05);
+}
+
+.message-self .message-bubble {
+  background-color: #a0e75a;
+  border-radius: 10rpx;
+}
+
+.message-content {
+  font-size: 32rpx;
+  color: #222;
+  line-height: 1.4;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.message-status {
+  font-size: 20rpx;
+  color: #999;
+  margin-top: 6rpx; /* 减少状态文本的上边距 */
+  margin-right: 15rpx;
+  line-height: 1;
+}
+
+.input-area {
+  height: 100rpx; /* 减少输入区域高度 */
+  background-color: #f7f7f7;
+  display: flex;
+  align-items: center;
+  padding: 0 20rpx;
+  border-top: 1px solid #e5e5e5;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  box-shadow: 0 -2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+
+.message-input {
+  flex: 1;
+  height: 70rpx; /* 稍微减少输入框高度 */
+  background-color: #fff;
+  border-radius: 8rpx;
+  padding: 0 20rpx;
+  font-size: 30rpx;
+  border: 1rpx solid #e5e5e5;
+}
+
+.send-btn {
+  width: 110rpx; /* 稍微减小发送按钮宽度 */
+  height: 70rpx; /* 减小发送按钮高度 */
+  line-height: 70rpx;
+  background-color: #07c160;
+  color: #fff;
+  border-radius: 8rpx;
+  margin-left: 15rpx; /* 减少发送按钮左边距 */
+  font-size: 28rpx;
+  text-align: center;
+}
+
+.login-tip {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-btn {
+  margin-top: 20rpx;
+  width: 200rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  background-color: #007aff;
+  color: #fff;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+}
+
+.safe-area-bottom {
+  height: 20rpx;
+  background-color: #fff;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 99;
+}
+</style> 
