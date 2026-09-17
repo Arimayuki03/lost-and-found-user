@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
 import store from '@/store/index.js';
 import { BASE_URL } from '@/config';
+import { updateMessageBadge } from '@/utils/common.js';
 
 class SocketIOService {
   constructor() {
@@ -16,6 +17,77 @@ class SocketIOService {
     this.currentChatTarget = null;
     this._joinedRooms = [];
     this.userStatusCallbacks = [];
+    this._badgeRefreshTimer = null;
+
+    // #ifdef H5
+    // 页面重新可见时（切回标签页/从后台恢复）若已登录但未连接，主动重建连接。
+    // 后台标签页定时器被浏览器节流时，socket.io 的重试会暂停，回到前台由此入口兜底自愈。
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.ensureConnected();
+        }
+      });
+    }
+    // #endif
+  }
+
+  /**
+   * 确保连接可用：已登录且未连接/未在连接时重建 Socket
+   */
+  ensureConnected() {
+    try {
+      const token = uni.getStorageSync('token');
+      const userInfo = store.state.userInfo;
+      if (!token || !userInfo || !userInfo.id) return;
+      if (!this.connected && !this.connecting) {
+        this.initSocket();
+      }
+    } catch (e) {
+      // 静默：重建失败时由 socket.io 重试或下次可见性事件再触发
+    }
+  }
+
+  /**
+   * 收消息事件统一入口：若消息是发给"我"且当前没有在看该会话，刷新未读角标
+   */
+  _handleIncomingForBadge(data) {
+    try {
+      if (!data || !data.sender_id || !data.receiver_id) return;
+      const myId = store.state.userInfo && store.state.userInfo.id !== undefined && store.state.userInfo.id !== null
+        ? String(store.state.userInfo.id) : '';
+      if (!myId || String(data.receiver_id) !== myId) return;
+      const viewingThisChat = this.isActiveChat && this.currentChatTarget &&
+        String(this.currentChatTarget.id) === String(data.sender_id);
+      if (!viewingThisChat) {
+        this.refreshUnreadBadge();
+      }
+    } catch (e) {
+      // 角标刷新失败不影响消息分发
+    }
+  }
+
+  /**
+   * 收到非当前会话的来消息时，防抖刷新"消息"tab 未读角标
+   */
+  refreshUnreadBadge() {
+    if (this._badgeRefreshTimer) clearTimeout(this._badgeRefreshTimer);
+    this._badgeRefreshTimer = setTimeout(() => {
+      this._badgeRefreshTimer = null;
+      const token = uni.getStorageSync('token');
+      if (!token) return;
+      uni.request({
+        url: BASE_URL + '/user/chat/unread-count',
+        method: 'GET',
+        header: { 'Authorization': 'Bearer ' + token },
+        success: (res) => {
+          if (res.statusCode >= 200 && res.statusCode < 300 && res.data) {
+            updateMessageBadge(res.data.total_unread || 0);
+          }
+        },
+        fail: () => {}
+      });
+    }, 500);
   }
 
   /**
@@ -23,6 +95,13 @@ class SocketIOService {
    * 建立与服务器的WebSocket连接并设置事件监听
    */
   initSocket() {
+    // #ifdef MP-WEIXIN
+    // 小程序运行时 engine.io 取不到 globalThis.WebSocket，socket.io-client 永远连不上，
+    // 且会触发无限重连空转耗电。本轮明确降级：不发连接，由调用方（chat.vue 等）的
+    // HTTP 轮询兜底接收新消息
+    console.warn('[socket] 小程序端暂不支持实时推送，已降级为 HTTP 轮询模式');
+    return;
+    // #endif
     // 确保用户已登录
     try {
       // 修改获取用户信息的方式
@@ -54,22 +133,27 @@ class SocketIOService {
         return;
       }
       
-      // 创建Socket.IO连接
-      try {
-        this.socket = io(this.socketUrl, {
-          transports: ['websocket'],
-          auth: {
-            token: token
-          },
-          query: {
-            token: token
-          },
+        // 创建Socket.IO连接
+        try {
+          // token 快照仅写入 engine.io 的 query（无法函数化，仅作参考不计为认证依据）；
+          // 认证以 auth 函数为准：socket.io-client 支持函数 auth，每次连接/重连时重新求值，
+          // 避免"建连后换发新 token，重连仍携带旧 token 快照"导致认证失败
+          const token = uni.getStorageSync('token');
+          this.socket = io(this.socketUrl, {
+            transports: ['websocket'],
+            auth: (cb) => cb({ token: uni.getStorageSync('token') }),
+            query: {
+              token: token
+            },
           extraHeaders: {
             Authorization: `Bearer ${token}`  // 添加标准JWT授权头
           },
           reconnection: true,
-          reconnectionAttempts: this.maxReconnectAttempts,
+          // 无限重试（配合退避上限）：此前 attempts=5×5s≈25s 后永久放弃，
+          // 长时间断网后停留在聊天页不会自愈
+          reconnectionAttempts: Infinity,
           reconnectionDelay: 5000,
+          reconnectionDelayMax: 15000,
           timeout: 20000
         });
         
@@ -127,12 +211,9 @@ class SocketIOService {
         this.socket.on('connect_error', (error) => {
           this.connected = false;
           this.connecting = false;
-          
-          if (this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.reconnectAttempts++;
-          } else {
-            this.socket = null;
-          }
+          // 仅计数用于日志/认证失败重试判断；不再置空 socket——
+          // 置空会让 socket.io 内置的无限重连被人为终止（原 attempts 耗尽即永久放弃）
+          this.reconnectAttempts++;
         });
         
         // 监听消息事件
@@ -195,6 +276,9 @@ class SocketIOService {
           } else {
             // 如果认证失败，可以尝试重新连接
             if (this.reconnectAttempts < this.maxReconnectAttempts) {
+              // 先断开当前连接再重试：连接本身是通的、只是认证失败，
+              // 若不 close，initSocket 开头的 connected/connecting 守卫会拦下重试导致空转
+              this.close();
               // 延迟一段时间后重新连接
               setTimeout(() => {
                 this.initSocket();
@@ -647,6 +731,7 @@ class SocketIOService {
       // 接收消息 - 旧版本接口，保留向后兼容
       this.socket.on('receive_message', (data) => {
         try {
+          this._handleIncomingForBadge(data);
           this.messageCallbacks.forEach(callback => {
             try {
               callback(data);
@@ -662,6 +747,7 @@ class SocketIOService {
       // 接收私聊消息 - 新版本接口
       this.socket.on('receive_private_message', (data) => {
         try {
+          this._handleIncomingForBadge(data);
           this.messageCallbacks.forEach(callback => {
             try {
               callback(data);
@@ -884,7 +970,9 @@ class SocketIOService {
         const userInfo = store.state.userInfo;
         
         if (token && userInfo && userInfo.id) {
-          // 聊天页面变为活跃，初始化Socket.IO连接
+          // 聊天页面变为活跃且未连接：重建 Socket.IO 连接
+          // （此前该分支只有注释没有调用，导致断网后回到聊天页不自愈）
+          this.initSocket();
         } else {
           // 用户未登录，不建立Socket.IO连接
         }
@@ -896,6 +984,7 @@ class SocketIOService {
     else if (isActive && !previousState && this.connected && this.currentChatTarget) {
       try {
         // 聊天页面从非活跃变为活跃，确保加入了聊天对象房间
+        this.joinChatTargetRoom(this.currentChatTarget.id);
       } catch (error) {
         // 重新加入聊天对象房间时出错
       }

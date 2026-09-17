@@ -1,5 +1,5 @@
 <template>
-  <view class="chat-list-container">
+  <view class="chat-list-container lf-login-guide">
     <!-- 导航栏占位 -->
     <view class="nav-placeholder" :style="navPlaceholderStyle"></view>
     
@@ -15,20 +15,40 @@
     
     <!-- 已登录状态 -->
     <block v-else>
-      <!-- 消息列表 -->
-      <scroll-view class="chat-list" scroll-y v-if="sortedContacts.length > 0" :style="{ paddingBottom: safeAreaBottomHeight + 'px' }">
-        <view 
-          class="chat-item" 
-          v-for="(item, index) in sortedContacts" 
-          :key="index"
-          @tap="goToChat(item.id)"
-          :class="{'has-unread': unreadCounts[item.id] && unreadCounts[item.id] > 0}"
-        >
-          <view class="chat-badge" v-if="unreadCounts[item.id] && unreadCounts[item.id] > 0">
-            <text class="badge-text">{{ unreadCounts[item.id] > 99 ? '99+' : unreadCounts[item.id] }}</text>
+      <!-- 首屏骨架屏 -->
+      <view class="chat-list" v-if="!firstLoaded">
+        <view class="chat-card">
+          <view class="chat-item skeleton-item" v-for="i in 5" :key="i">
+            <view class="skeleton-block chat-avatar"></view>
+            <view class="chat-content">
+              <view class="skeleton-block skeleton-name-line"></view>
+              <view class="skeleton-block skeleton-preview-line"></view>
+            </view>
           </view>
-          <image class="chat-avatar" :src="item.avatar_url || '/static/default-avatar.png'" mode="aspectFill"></image>
-          <text class="chat-name">{{ item.name }}</text>
+        </view>
+      </view>
+      <!-- 消息列表 -->
+      <scroll-view class="chat-list" scroll-y v-else-if="sortedContacts.length > 0" :style="{ paddingBottom: safeAreaBottomHeight + 'px' }">
+        <view class="chat-card">
+          <view 
+            class="chat-item" 
+            v-for="(item, index) in sortedContacts" 
+            :key="index"
+            @tap="goToChat(item.id)"
+            :class="{'has-unread': rowUnread(item) > 0}"
+          >
+            <view class="chat-badge" v-if="rowUnread(item) > 0">
+              <text class="badge-text">{{ rowUnread(item) > 99 ? '99+' : rowUnread(item) }}</text>
+            </view>
+            <image class="chat-avatar" :src="item.avatar_url || '/static/default-avatar.png'" mode="aspectFill"></image>
+            <view class="chat-content">
+              <view class="chat-row-top">
+                <text class="chat-name">{{ item.name }}</text>
+                <text class="chat-time">{{ relativeTime(item.last_message_time) }}</text>
+              </view>
+              <text class="chat-preview">{{ previewText(item) }}</text>
+            </view>
+          </view>
         </view>
         
         <!-- 底部安全区域 -->
@@ -36,17 +56,14 @@
       </scroll-view>
       
       <!-- 空状态 -->
-      <view class="empty-state" v-else>
-        <image class="empty-image" src="/static/empty-message.png" mode="aspectFit"></image>
-        <text class="empty-text">暂无聊天记录</text>
-      </view>
+      <lf-empty v-else-if="sortedContacts.length === 0" type="message" text="暂无聊天记录" />
     </block>
   </view>
 </template>
 
 <script>
 import { mapState } from 'vuex';
-import { checkLogin, goToLogin } from '../../utils/common';
+import { checkLogin, goToLogin, updateMessageBadge, relativeTime } from '../../utils/common';
 
 export default {
   data() {
@@ -54,6 +71,7 @@ export default {
       chatContacts: [],
       unreadCounts: {},
       loading: false,
+      firstLoaded: false, // 首屏是否已加载完成（未完成时显示骨架屏）
       isLoggedIn: false,
       statusBarHeight: 0, // 状态栏高度
       navBarHeight: 44,    // 导航栏高度（默认）
@@ -77,8 +95,8 @@ export default {
       
       return [...this.chatContacts].sort((a, b) => {
         // 优先显示有未读消息的联系人
-        const aHasUnread = this.unreadCounts[a.id] && this.unreadCounts[a.id] > 0;
-        const bHasUnread = this.unreadCounts[b.id] && this.unreadCounts[b.id] > 0;
+        const aHasUnread = this.rowUnread(a) > 0;
+        const bHasUnread = this.rowUnread(b) > 0;
         
         if (aHasUnread && !bHasUnread) return -1;
         if (!aHasUnread && bHasUnread) return 1;
@@ -131,6 +149,31 @@ export default {
   },
   
   methods: {
+    /**
+     * 行未读数：优先用 contacts 接口返回的 unread_count，
+     * 兼容回退到 unread_by_sender 映射
+     */
+    rowUnread(item) {
+      if (typeof item.unread_count === 'number') return item.unread_count;
+      return (this.unreadCounts[item.id] && this.unreadCounts[item.id] > 0) ? this.unreadCounts[item.id] : 0;
+    },
+    
+    /**
+     * 会话摘要：自己发的加"我: "前缀，单行截断由样式负责
+     */
+    previewText(item) {
+      if (!item.last_message) return '暂无消息';
+      const mine = this.currentUser && item.last_message_sender_id === this.currentUser.id;
+      return mine ? `我: ${item.last_message}` : item.last_message;
+    },
+    
+    /**
+     * 相对时间（刚刚/x分钟前/x小时前/x天前/x个月前/x年前）
+     */
+    relativeTime(time) {
+      return relativeTime(time);
+    },
+    
     // 获取系统信息（状态栏高度和底部安全区域）
     getSystemInfo() {
       try {
@@ -172,14 +215,17 @@ export default {
       });
     },
     
-    // 设置加载状态
+    // 设置加载状态（首屏用骨架屏占位，不弹 loading；二次加载才弹窗）
     setLoading(status) {
       this.loading = status;
-      if (status) {
-        uni.showLoading({ title: '加载中...' });
-      } else {
-        uni.hideLoading();
+      if (this.firstLoaded) {
+        if (status) {
+          uni.showLoading({ title: '加载中...' });
+        } else {
+          uni.hideLoading();
+        }
       }
+      if (!status) this.firstLoaded = true;
     },
     
     // 处理错误
@@ -197,7 +243,7 @@ export default {
       this.setLoading(true);
       
       try {
-        // 获取聊天联系人列表
+        // 获取聊天联系人列表（含最后一条消息、时间与未读数）
         const contactsRes = await this.$api.message.getChatContacts();
         this.chatContacts = Array.isArray(contactsRes) ? contactsRes : []; // 确保是一个数组
         // 如果联系人列表中没有头像信息，则补充获取
@@ -219,25 +265,22 @@ export default {
                   // 不能误清空整个联系人列表
                 }
               }
-
-              // 只需设置消息时间用于排序，不需要显示
-              if (!contact.last_message_time) {
-                enhancedContact.last_message_time = contact.updated_at || new Date().toISOString();
-              }
-
+              
               return enhancedContact;
             })
           );
-
+          
           this.chatContacts = enhancedContacts || [];
         } else {
           this.chatContacts = contactsRes || [];
         }
-
-        // 获取未读消息数量
+        
+        // 获取未读消息数量（用于底部 tab 总角标与旧字段兼容）
         const unreadRes = await this.$api.message.getUnreadCount();
         // 加空值保护，接口异常返回时避免 TypeError 落入 catch 误报"加载失败"
         this.unreadCounts = (unreadRes && unreadRes.unread_by_sender) || {};
+        // 同步底部"消息"tab 的未读总角标
+        updateMessageBadge((unreadRes && unreadRes.total_unread) || 0);
       } catch (error) {
         this.handleError('加载失败，请稍后再试');
       } finally {
@@ -265,11 +308,11 @@ export default {
 };
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 .chat-list-container {
   padding: 0;
   height: 100vh;
-  background-color: #f8f8f8;
+  background-color: $uni-bg-color-grey;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -288,59 +331,11 @@ export default {
   margin-bottom: -50rpx; /* 添加负边距，减小与列表的距离 */
 }
 
-.login-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding-top: 200rpx;
-}
-
-.login-image {
-  width: 200rpx;
-  height: 200rpx;
-  margin-bottom: 40rpx;
-}
-
-.login-tips {
-  font-size: 30rpx;
-  color: #666;
-  margin-bottom: 40rpx;
-}
-
-.login-btns {
-  display: flex;
-  justify-content: center;
-  width: 500rpx;
-  margin-top: 30rpx;
-  gap: 40rpx;
-}
-
-.btn {
-  width: 220rpx;
-  height: 90rpx;
-  font-size: 30rpx;
-  border-radius: 45rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.login-btn {
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  color: #fff;
-  box-shadow: 0 5rpx 15rpx rgba(0, 122, 255, 0.3);
-}
-
-.register-btn {
-  background-color: #fff;
-  color: #007aff;
-  border: 1px solid #007aff;
-}
+/* 未登录引导块样式见 styles/common.scss（.lf-login-guide） */
 
 .chat-list {
   flex: 1;
-  padding: 10rpx 20rpx 60rpx; /* 将顶部内边距从20rpx减小到10rpx */
+  padding: 8rpx 24rpx 60rpx;
   overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
   position: relative;
@@ -351,45 +346,43 @@ export default {
   box-sizing: border-box;
 }
 
+/* 分组白卡：会话行以分隔线相连，替代原先逐行浮卡 */
+.chat-card {
+  background-color: $uni-bg-color;
+  border-radius: $uni-border-radius-card;
+  box-shadow: $uni-shadow-card;
+  overflow: hidden;
+}
+
 .chat-item {
   position: relative;
   display: flex;
   align-items: center;
-  padding: 20rpx;
-  margin-bottom: 15rpx; /* 减小卡片间距从20rpx到15rpx */
-  background-color: #fff;
-  border-radius: 12rpx;
-  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
-  transition: background-color 0.3s;
-  transform: translateZ(0);
-  will-change: transform;
-  width: 100%;
-  box-sizing: border-box;
-  
-  &.has-unread {
-    background-color: rgba(0, 122, 255, 0.05);
+  padding: 26rpx 28rpx;
+  background-color: $uni-bg-color;
+  transition: background-color 0.15s;
+
+  & + .chat-item {
+    border-top: 1rpx solid $uni-border-color-split;
   }
-  
-  /* 最后一个项目添加额外底部边距 */
-  &:last-child {
-    margin-bottom: 40rpx;
-  }
-  
-  /* 第一个项目减少顶部边距 */
-  &:first-child {
-    margin-top: 0rpx;
+
+  &:active {
+    background-color: $uni-bg-color-hover;
   }
 }
 
+/* 未读角标：贴在头像右上角 */
 .chat-badge {
   position: absolute;
-  top: 10rpx;
-  left: 70rpx;
-  min-width: 40rpx;
-  height: 40rpx;
+  top: 18rpx;
+  left: 96rpx;
+  min-width: 36rpx;
+  height: 36rpx;
   padding: 0 10rpx;
-  background-color: #ff3b30;
-  border-radius: 20rpx;
+  background-color: $uni-color-error;
+  border-radius: 18rpx;
+  border: 2rpx solid $uni-bg-color;
+  box-sizing: content-box;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -397,29 +390,74 @@ export default {
 }
 
 .badge-text {
-  color: #fff;
-  font-size: 24rpx;
+  color: $uni-text-color-inverse;
+  font-size: 20rpx;
+  line-height: 1;
 }
 
 .chat-avatar {
-  width: 100rpx;
-  height: 100rpx;
-  border-radius: 50%;
-  margin-right: 20rpx;
-  background-color: #f0f0f0;
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 24rpx;
+  margin-right: 24rpx;
+  background-color: $uni-bg-color-section;
   flex-shrink: 0;
 }
 
+/* 姓名 + 摘要两行结构（IM 惯例） */
+.chat-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.chat-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .chat-name {
-  font-size: 32rpx;
+  font-size: $uni-font-size-lg;
   font-weight: 500;
-  color: #333;
+  color: $uni-text-color;
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: calc(100% - 120rpx); /* 确保名称不会超出可用空间，留出头像的空间 */
-  margin-right: 20rpx; /* 增加右边距，防止文字紧贴右边界 */
+}
+
+.chat-time {
+  font-size: $uni-font-size-caption;
+  color: $uni-text-color-grey;
+  flex-shrink: 0;
+  margin-left: 16rpx;
+}
+
+.chat-preview {
+  font-size: $uni-font-size-sm;
+  color: $uni-text-color-grey;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 骨架屏 */
+.skeleton-item {
+  pointer-events: none;
+}
+
+.skeleton-name-line {
+  width: 40%;
+  height: 32rpx;
+  margin-bottom: 14rpx;
+}
+
+.skeleton-preview-line {
+  width: 70%;
+  height: 26rpx;
 }
 
 /* 底部安全区域 */
@@ -428,24 +466,4 @@ export default {
   width: 100%;
   flex-shrink: 0;
 }
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  flex: 1;
-}
-
-.empty-image {
-  width: 240rpx;
-  height: 240rpx;
-  margin-bottom: 20rpx;
-}
-
-.empty-text {
-  font-size: 30rpx;
-  color: #999;
-}
-</style> 
+</style>

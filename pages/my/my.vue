@@ -1,27 +1,24 @@
 <template>
-  <view class="my-container">
-    <!-- 用户信息卡片 -->
+  <view class="my-container lf-login-guide">
+    <!-- 用户信息 hero（渐变头部，菜单卡片负 margin 叠压） -->
     <view class="user-card">
-      <image class="user-avatar" :src="userInfo?.avatar_url || '/static/logo.png'" mode="aspectFill" @tap="isLoggedIn && showAvatarOptions()"></image>
+      <view class="backdrop"></view>
+      <image class="user-avatar" :src="userInfo?.avatar_url || '/static/default-avatar.png'" mode="aspectFill" @tap="isLoggedIn && showAvatarOptions()"></image>
       <view class="user-info">
         <text class="user-name">{{ userInfo?.name || '未登录' }}</text>
-        <text class="user-id">{{ userInfo?.student_id ? '学号：' + userInfo.student_id : '请登录以使用完整功能' }}</text>
+        <text class="user-id">{{ userInfo?.student_id ? '学号 ' + userInfo.student_id : '登录后可使用完整功能' }}</text>
       </view>
     </view>
     
-    <!-- 未登录状态 -->
+    <!-- 未登录状态（引导块样式见 styles/common.scss .lf-login-guide） -->
     <view v-if="!isLoggedIn" class="menu-section">
       <view class="menu-title">账号登录</view>
       <view class="menu-list">
         <view class="login-container">
           <view class="login-tips">登录后可使用更多功能</view>
           <view class="login-btns">
-            <view class="btn-wrapper">
-              <button class="btn login-btn" @tap="goToLogin">登录</button>
-            </view>
-            <view class="btn-wrapper">
-              <button class="btn register-btn" @tap="goToRegister">注册</button>
-            </view>
+            <button class="btn login-btn" @tap="goToLogin">登录</button>
+            <button class="btn register-btn" @tap="goToRegister">注册</button>
           </view>
         </view>
       </view>
@@ -29,11 +26,14 @@
     
     <!-- 已登录状态 - 功能菜单 -->
     <block v-if="isLoggedIn">
-      <!-- 用户详细信息 - 点击按钮显示 -->
+      <!-- 用户详细信息 - 点击展开 -->
       <view class="menu-section">
         <view class="menu-title-with-btn">
-          <text>账号信息</text>
-          <button class="small-btn" @tap="toggleUserInfoDetail">{{ showUserInfoDetail ? '收起' : '查看详情' }}</button>
+          <view class="menu-title-text"><text>账号信息</text></view>
+          <view class="section-toggle" @tap="toggleUserInfoDetail">
+            <text class="section-toggle-label">{{ showUserInfoDetail ? '收起' : '查看详情' }}</text>
+            <uni-icons :type="showUserInfoDetail ? 'top' : 'bottom'" size="13" :color="colorPrimary" />
+          </view>
         </view>
         <view class="menu-list" v-if="showUserInfoDetail">
           <view class="info-item">
@@ -54,24 +54,27 @@
       <!-- 个人设置菜单 - 改为二级菜单 -->
       <view class="menu-section">
         <view class="menu-title-with-btn">
-          <text>个人设置</text>
-          <button class="small-btn" @tap="toggleSettingsMenu">{{ showSettingsMenu ? '收起' : '展开' }}</button>
+          <view class="menu-title-text"><text>个人设置</text></view>
+          <view class="section-toggle" @tap="toggleSettingsMenu">
+            <text class="section-toggle-label">{{ showSettingsMenu ? '收起' : '展开设置' }}</text>
+            <uni-icons :type="showSettingsMenu ? 'top' : 'bottom'" size="13" :color="colorPrimary" />
+          </view>
         </view>
         <view class="menu-list" v-if="showSettingsMenu">
           <view class="menu-item" @tap="showEditProfileModal">
-            <view class="menu-icon profile-icon">个</view>
+            <lf-icon-item class="menu-icon" icon="person" :color="iconColors.profile" />
             <text class="menu-name">修改个人信息</text>
-            <text class="menu-arrow">></text>
+            <uni-icons class="menu-arrow" type="right" size="16" :color="colorSecondary" />
           </view>
           <view class="menu-item" @tap="showAvatarOptions">
-            <view class="menu-icon avatar-icon">头</view>
+            <lf-icon-item class="menu-icon" icon="image" :color="iconColors.avatar" />
             <text class="menu-name">修改头像</text>
-            <text class="menu-arrow">></text>
+            <uni-icons class="menu-arrow" type="right" size="16" :color="colorSecondary" />
           </view>
           <view class="menu-item" @tap="showEditEmailModal">
-            <view class="menu-icon email-icon">邮</view>
+            <lf-icon-item class="menu-icon" icon="email" :color="iconColors.email" />
             <text class="menu-name">修改邮箱</text>
-            <text class="menu-arrow">></text>
+            <uni-icons class="menu-arrow" type="right" size="16" :color="colorSecondary" />
           </view>
         </view>
       </view>
@@ -80,14 +83,14 @@
         <view class="menu-title">我的物品</view>
         <view class="menu-list">
           <view class="menu-item" @tap="goToMyPublish('lost')">
-            <view class="menu-icon lost-icon">丢</view>
+            <lf-icon-item class="menu-icon" icon="search" :color="iconColors.lost" />
             <text class="menu-name">我的失物</text>
-            <text class="menu-arrow">></text>
+            <uni-icons class="menu-arrow" type="right" size="16" :color="colorSecondary" />
           </view>
           <view class="menu-item" @tap="goToMyPublish('found')">
-            <view class="menu-icon found-icon">招</view>
+            <lf-icon-item class="menu-icon" icon="flag" :color="iconColors.found" />
             <text class="menu-name">我的招领</text>
-            <text class="menu-arrow">></text>
+            <uni-icons class="menu-arrow" type="right" size="16" :color="colorSecondary" />
           </view>
         </view>
       </view>
@@ -98,14 +101,14 @@
       <view class="menu-title">其他功能</view>
       <view class="menu-list">
         <view class="menu-item" @tap="goToFeedback">
-          <view class="menu-icon feedback-icon">反</view>
+          <lf-icon-item class="menu-icon" icon="compose" :color="iconColors.feedback" />
           <text class="menu-name">意见反馈</text>
-          <text class="menu-arrow">></text>
+          <uni-icons class="menu-arrow" type="right" size="16" :color="colorSecondary" />
         </view>
         <view class="menu-item" @tap="showAbout">
-          <view class="menu-icon about-icon">关</view>
+          <lf-icon-item class="menu-icon" icon="info" :color="iconColors.about" />
           <text class="menu-name">关于我们</text>
-          <text class="menu-arrow">></text>
+          <uni-icons class="menu-arrow" type="right" size="16" :color="colorSecondary" />
         </view>
       </view>
     </view>
@@ -113,50 +116,57 @@
     <!-- 退出登录按钮 - 仅登录状态显示 -->
     <button v-if="isLoggedIn" class="logout-btn" @tap="handleLogout">退出登录</button>
     
-    <!-- 自定义修改个人信息弹窗 -->
-    <view class="custom-popup" v-if="showProfilePopup">
-      <view class="popup-mask" @tap="closeEditProfileModal"></view>
-      <view class="popup-content">
-        <view class="popup-header">
-          <text class="popup-title">修改个人信息</text>
-          <text class="popup-close" @tap="closeEditProfileModal">×</text>
+    <!-- 自定义修改个人信息弹窗（底部抽屉，公共样式见 common.scss .lf-popup） -->
+    <view class="lf-popup" v-if="showProfilePopup">
+      <view class="lf-popup-mask" @tap="closeEditProfileModal"></view>
+      <view class="lf-popup-content">
+        <view class="lf-popup-header">
+          <text class="lf-popup-title">修改个人信息</text>
+          <view class="lf-popup-close" @tap="closeEditProfileModal"><uni-icons type="closeempty" size="18" :color="colorGrey" /></view>
         </view>
-        <view class="popup-body">
+        <view class="lf-popup-body">
           <view class="form-item">
             <text class="form-label">姓名</text>
             <input class="form-input" v-model="editForm.name" placeholder="请输入姓名" />
           </view>
           <view class="form-item">
+            <text class="form-label">旧密码</text>
+            <view class="password-input-container">
+              <input class="form-input password-input" :type="oldPasswordVisible ? 'text' : 'password'" v-model="editForm.oldPassword" placeholder="请输入当前密码" />
+              <uni-icons class="password-toggle" :type="oldPasswordVisible ? 'eye-slash' : 'eye'" size="22" :color="colorGrey" @click="oldPasswordVisible = !oldPasswordVisible" />
+            </view>
+          </view>
+          <view class="form-item">
             <text class="form-label">新密码</text>
             <view class="password-input-container">
               <input class="form-input password-input" :type="passwordVisible ? 'text' : 'password'" v-model="editForm.password" placeholder="请输入新密码（不修改请留空）" />
-              <text class="password-toggle" @tap="passwordVisible = !passwordVisible">{{ passwordVisible ? '隐藏' : '显示' }}</text>
+              <uni-icons class="password-toggle" :type="passwordVisible ? 'eye-slash' : 'eye'" size="22" :color="colorGrey" @click="passwordVisible = !passwordVisible" />
             </view>
           </view>
           <view class="form-item">
             <text class="form-label">确认密码</text>
             <view class="password-input-container">
               <input class="form-input password-input" :type="confirmPasswordVisible ? 'text' : 'password'" v-model="editForm.confirmPassword" placeholder="请再次输入新密码" />
-              <text class="password-toggle" @tap="confirmPasswordVisible = !confirmPasswordVisible">{{ confirmPasswordVisible ? '隐藏' : '显示' }}</text>
+              <uni-icons class="password-toggle" :type="confirmPasswordVisible ? 'eye-slash' : 'eye'" size="22" :color="colorGrey" @click="confirmPasswordVisible = !confirmPasswordVisible" />
             </view>
           </view>
         </view>
-        <view class="popup-footer">
-          <button class="popup-btn cancel-btn" @tap="closeEditProfileModal">取消</button>
-          <button class="popup-btn confirm-btn" @tap="submitEditProfile">确认</button>
+        <view class="lf-popup-footer">
+          <button class="lf-btn-ghost lf-popup-btn" @tap="closeEditProfileModal">取消</button>
+          <button class="lf-btn-primary lf-popup-btn" @tap="submitEditProfile">确认</button>
         </view>
       </view>
     </view>
-    
+
     <!-- 自定义修改邮箱弹窗 -->
-    <view class="custom-popup" v-if="showEmailPopup">
-      <view class="popup-mask" @tap="closeEditEmailModal"></view>
-      <view class="popup-content">
-        <view class="popup-header">
-          <text class="popup-title">修改邮箱</text>
-          <text class="popup-close" @tap="closeEditEmailModal">×</text>
+    <view class="lf-popup" v-if="showEmailPopup">
+      <view class="lf-popup-mask" @tap="closeEditEmailModal"></view>
+      <view class="lf-popup-content">
+        <view class="lf-popup-header">
+          <text class="lf-popup-title">修改邮箱</text>
+          <view class="lf-popup-close" @tap="closeEditEmailModal"><uni-icons type="closeempty" size="18" :color="colorGrey" /></view>
         </view>
-        <view class="popup-body">
+        <view class="lf-popup-body">
           <view class="form-item">
             <text class="form-label">新邮箱</text>
             <input class="form-input" v-model="emailForm.new_email" placeholder="请输入新邮箱" />
@@ -171,9 +181,9 @@
             </view>
           </view>
         </view>
-        <view class="popup-footer">
-          <button class="popup-btn cancel-btn" @tap="closeEditEmailModal">取消</button>
-          <button class="popup-btn confirm-btn" @tap="submitEditEmail">确认</button>
+        <view class="lf-popup-footer">
+          <button class="lf-btn-ghost lf-popup-btn" @tap="closeEditEmailModal">取消</button>
+          <button class="lf-btn-primary lf-popup-btn" @tap="submitEditEmail">确认</button>
         </view>
       </view>
     </view>
@@ -183,18 +193,35 @@
 <script>
 import { mapState, mapActions } from 'vuex';
 import { BASE_URL } from '@/config';
+import { COLOR_PRIMARY, COLOR_PRIMARY_LIGHT, COLOR_SUCCESS, COLOR_WARNING, COLOR_ERROR, COLOR_GREY, COLOR_SECONDARY } from '@/config/ui';
 import socketIOService from '@/utils/socketio.js';
+import request from '@/utils/request';
 
 export default {
   data() {
     return {
+      colorPrimary: COLOR_PRIMARY, // 主色（展开箭头等）
+      colorGrey: COLOR_GREY, // 辅助图标灰（与 $uni-text-color-grey 同步）
+      colorSecondary: COLOR_SECONDARY, // 更弱一级灰（箭头/占位图标）
+      // 菜单图标圆底色（与 uni.scss token 同步）
+      iconColors: {
+        profile: COLOR_SUCCESS,
+        avatar: COLOR_WARNING,
+        email: COLOR_PRIMARY_LIGHT,
+        lost: COLOR_ERROR,
+        found: COLOR_SUCCESS,
+        feedback: COLOR_WARNING,
+        about: COLOR_PRIMARY,
+      },
       // 修改个人信息表单
       editForm: {
         name: '',
+        oldPassword: '',
         password: '',
         confirmPassword: ''
       },
       // 密码显示状态
+      oldPasswordVisible: false,
       passwordVisible: false,
       confirmPasswordVisible: false,
       // 修改邮箱表单
@@ -209,6 +236,8 @@ export default {
       // 弹窗显示状态
       showProfilePopup: false,
       showEmailPopup: false,
+      // 是否正在上传图片（防重复上传）
+      uploading: false,
       // 新增：控制用户信息和设置菜单的显示状态
       showUserInfoDetail: false,
       showSettingsMenu: false
@@ -347,9 +376,11 @@ export default {
     showEditProfileModal() {
       // 初始化表单数据
       this.editForm.name = this.userInfo?.name || '';
+      this.editForm.oldPassword = '';
       this.editForm.password = '';
       this.editForm.confirmPassword = '';
       // 重置密码显示状态
+      this.oldPasswordVisible = false;
       this.passwordVisible = false;
       this.confirmPasswordVisible = false;
       // 显示自定义弹窗
@@ -374,10 +405,19 @@ export default {
       
       // 如果输入了密码，则验证密码
       if (this.editForm.password) {
-        // 验证密码长度
-        if (this.editForm.password.length < 6) {
+        // 修改密码必须同时提供旧密码
+        if (!this.editForm.oldPassword) {
           uni.showToast({
-            title: '密码长度不能少于6位',
+            title: '请输入旧密码',
+            icon: 'none'
+          });
+          return;
+        }
+        
+        // 验证密码长度（与后端 8-64 位要求一致）
+        if (this.editForm.password.length < 8) {
+          uni.showToast({
+            title: '密码长度不能少于8位',
             icon: 'none'
           });
           return;
@@ -401,6 +441,7 @@ export default {
       // 如果密码不为空，则一并修改
       if (this.editForm.password) {
         data.password = this.editForm.password;
+        data.old_password = this.editForm.oldPassword;
       }
       
       try {
@@ -414,12 +455,12 @@ export default {
         await this.refreshUserInfo();
       } catch (error) {
         uni.showToast({
-          title: '修改失败',
+          title: error.error || error.message || '修改失败',
           icon: 'none'
         });
       }
     },
-    
+
     // 显示头像选项
     showAvatarOptions() {
       uni.showActionSheet({
@@ -438,74 +479,70 @@ export default {
     
     // 选择图片
     chooseImage(sourceType) {
+      // 并发保护：上一次上传尚未完成时拒绝再次进入
+      if (this.uploading) {
+        uni.showToast({ title: '正在上传中，请稍候', icon: 'none' });
+        return;
+      }
       uni.chooseImage({
         count: 1,
         sourceType: [sourceType],
         success: (res) => {
+          // 客户端大小预检：超过 8MB 直接拒绝（部分端 tempFiles 元素无 size 字段，跳过检查）
+          const tempFile = res.tempFiles && res.tempFiles[0];
+          if (tempFile && typeof tempFile.size === 'number' && tempFile.size > 8 * 1024 * 1024) {
+            uni.showToast({ title: '图片不能超过8MB，请重新选择', icon: 'none' });
+            return;
+          }
           const tempFilePath = res.tempFilePaths[0];
           // 上传图片
           this.uploadImage(tempFilePath);
         }
       });
     },
-    
+
     // 上传图片
     uploadImage(filePath) {
       uni.showLoading({
         title: '上传中...'
       });
+      this.uploading = true;
 
-      // 使用uni.uploadFile上传图片到服务器（必须携带 token，否则必然 401）
-      uni.uploadFile({
-        url: `${BASE_URL}/common/images/upload`,
+      // 统一封装上传（自动携带并刷新 token）
+      request.uploadFile({
+        url: '/common/images/upload',
         filePath: filePath,
         name: 'file',
-        header: {
-          'Authorization': 'Bearer ' + uni.getStorageSync('token')
-        },
         formData: {
           'type': 'avatar'
-        },
-        success: async (uploadRes) => {
-          uni.hideLoading();
-
-          try {
-            if (uploadRes.statusCode !== 200) {
-              throw new Error(`上传失败(${uploadRes.statusCode})`);
-            }
-            // 解析上传结果
-            const data = JSON.parse(uploadRes.data);
-
-            if (data.file_url) {
-              // 更新头像
-              const res = await this.updateAvatar({
-                avatar_url: data.file_url
-              });
-
-              uni.showToast({
-                title: '头像更新成功',
-                icon: 'success'
-              });
-
-              // 刷新用户信息
-              await this.refreshUserInfo();
-            } else {
-              throw new Error('上传失败，未获取到图片URL');
-            }
-          } catch (error) {
-            uni.showToast({
-              title: '头像更新失败，请稍后再试',
-              icon: 'none'
-            });
-          }
-        },
-        fail: (err) => {
-          uni.hideLoading();
-          uni.showToast({
-            title: '图片上传失败',
-            icon: 'none'
-          });
         }
+      }).then(async (data) => {
+        uni.hideLoading();
+
+        if (data.file_url) {
+          // 更新头像
+          await this.updateAvatar({
+            avatar_url: data.file_url
+          });
+
+          uni.showToast({
+            title: '头像更新成功',
+            icon: 'success'
+          });
+
+          // 刷新用户信息
+          await this.refreshUserInfo();
+        } else {
+          throw new Error('上传失败，未获取到图片URL');
+        }
+      }).catch(() => {
+        uni.hideLoading();
+        uni.showToast({
+          title: '头像更新失败，请稍后再试',
+          icon: 'none'
+        });
+      }).finally(() => {
+        this.uploading = false;
       });
     },
     
@@ -630,7 +667,7 @@ export default {
         await this.refreshUserInfo();
       } catch (error) {
         uni.showToast({
-          title: '邮箱修改失败',
+          title: error.error || error.message || '邮箱修改失败',
           icon: 'none'
         });
       }
@@ -654,225 +691,181 @@ export default {
 };
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 .my-container {
   min-height: 100vh;
-  background-color: #f8f8f8;
+  background-color: $uni-bg-color-grey;
   padding-bottom: 40rpx;
 }
 
+/* ===== 用户信息 hero ===== */
 .user-card {
-  height: 240rpx;
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
+  height: 300rpx;
+  background: $uni-gradient-hero;
   display: flex;
   align-items: center;
   padding: 0 40rpx;
   border-bottom-left-radius: 40rpx;
   border-bottom-right-radius: 40rpx;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 12rpx 32rpx rgba(10, 114, 245, 0.2);
+}
+
+/* 装饰性半透明圆 */
+.backdrop {
+  position: absolute;
+  top: -80rpx;
+  right: -60rpx;
+  width: 260rpx;
+  height: 260rpx;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .user-avatar {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 60rpx;
-  border: 4rpx solid #fff;
-  background-color: #fff;
+  width: 130rpx;
+  height: 130rpx;
+  border-radius: 50%;
+  border: 4rpx solid rgba(255, 255, 255, 0.9);
+  background-color: rgba(255, 255, 255, 0.25);
+  z-index: 1;
 }
 
 .user-info {
   margin-left: 30rpx;
+  z-index: 1;
 }
 
 .user-name {
-  font-size: 36rpx;
-  color: #fff;
-  font-weight: bold;
-  margin-bottom: 10rpx;
+  font-size: 40rpx;
+  color: $uni-text-color-inverse;
+  font-weight: 600;
+  margin-bottom: 12rpx;
   display: block;
 }
 
 .user-id {
-  font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.8);
+  font-size: $uni-font-size-base;
+  color: rgba(255, 255, 255, 0.82);
 }
 
+/* ===== 功能菜单卡片 ===== */
 .menu-section {
-  margin: 30rpx 30rpx 0;
-  background-color: #fff;
-  border-radius: 20rpx;
+  margin: 24rpx 24rpx 0;
+  background-color: $uni-bg-color;
+  border-radius: $uni-border-radius-card;
   overflow: hidden;
+  box-shadow: $uni-shadow-card;
 }
 
 .menu-title {
-  font-size: 30rpx;
-  color: #333;
-  font-weight: bold;
-  padding: 30rpx;
-  border-bottom: 1px solid #f5f5f5;
+  font-size: $uni-font-size-md;
+  color: $uni-text-color;
+  font-weight: 600;
+  padding: 28rpx 28rpx 20rpx;
 }
 
 .menu-title-with-btn {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 30rpx;
-  color: #333;
-  font-weight: bold;
-  padding: 30rpx;
-  border-bottom: 1px solid #f5f5f5;
+  padding: 28rpx 28rpx 20rpx;
 }
 
-.small-btn {
-  background-color: #007AFF;
-  color: #fff;
-  border: none;
-  padding: 10rpx 20rpx;
-  font-size: 24rpx;
-  border-radius: 25rpx;
-  line-height: 1;
-  margin: 0;
-  min-height: auto;
+.menu-title-text {
+  font-size: $uni-font-size-md;
+  color: $uni-text-color;
+  font-weight: 600;
+}
+
+/* 展开/收起文字按钮 */
+.section-toggle {
+  display: flex;
+  align-items: center;
+
+  .section-toggle-label {
+    font-size: $uni-font-size-caption;
+    color: $uni-color-primary;
+    margin-right: 4rpx;
+  }
 }
 
 .menu-list {
-  padding: 0 30rpx;
+  padding: 0 28rpx 8rpx;
 }
 
 .menu-item {
-  height: 100rpx;
+  height: 104rpx;
   display: flex;
   align-items: center;
-  border-bottom: 1px solid #f5f5f5;
-}
+  border-bottom: 1rpx solid $uni-border-color-split;
+  transition: background-color 0.15s;
 
-.menu-item:last-child {
-  border-bottom: none;
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:active {
+    background-color: $uni-bg-color-hover;
+  }
 }
 
 .menu-icon {
-  width: 60rpx;
-  height: 60rpx;
-  border-radius: 30rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: bold;
-  font-size: 28rpx;
-  margin-right: 20rpx;
-}
-
-.lost-icon {
-  background-color: #FF3B30;
-}
-
-.found-icon {
-  background-color: #4CD964;
-}
-
-.message-icon {
-  background-color: #007AFF;
-}
-
-.feedback-icon {
-  background-color: #FF9500;
-}
-
-.about-icon {
-  background-color: #5856D6;
-}
-
-.profile-icon {
-  background-color: #34C759;
-}
-
-.avatar-icon {
-  background-color: #FF9500;
-}
-
-.email-icon {
-  background-color: #5AC8FA;
+  width: 64rpx;
+  height: 64rpx;
+  margin-right: 22rpx;
 }
 
 .menu-name {
   flex: 1;
-  font-size: 30rpx;
-  color: #333;
+  font-size: $uni-font-size-md;
+  color: $uni-text-color;
 }
 
 .menu-arrow {
-  font-size: 32rpx;
-  color: #ccc;
-  font-weight: bold;
+  flex-shrink: 0;
 }
 
+/* ===== 未登录引导块（.login-tips/.login-btns/.btn 见 common.scss .lf-login-guide） ===== */
 .login-container {
-  padding: 20rpx 0;
-}
-
-.login-tips {
-  font-size: 28rpx;
-  color: #666;
-  text-align: center;
-  margin-bottom: 30rpx;
-}
-
-.login-btns {
   display: flex;
-  justify-content: center;
-  gap: 40rpx;
-  padding: 0 30rpx;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.btn-wrapper {
-  width: 200rpx;
-  display: flex;
-  justify-content: center;
-}
-
-.btn {
-  width: 200rpx;
-  height: 90rpx;
-  border-radius: 45rpx;
-  display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  font-size: 32rpx;
-  margin: 0;
-  padding: 0;
+  padding: 20rpx 0 40rpx;
 }
 
-.login-btn {
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  color: #fff;
-}
-
-.register-btn {
-  background-color: #fff;
-  color: #007AFF;
-  border: 1px solid #007AFF;
-}
-
+/* ===== 退出登录 ===== */
 .logout-btn {
-  width: 90%;
-  height: 90rpx;
-  background-color: #fff;
-  color: #FF3B30;
-  border-radius: 45rpx;
+  width: calc(100% - 48rpx);
+  height: 96rpx;
+  background-color: $uni-bg-color;
+  color: $uni-color-error;
+  border-radius: $uni-border-radius-card;
   border: none;
-  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.05);
-  margin-top: 60rpx;
+  box-shadow: $uni-shadow-card;
+  margin-top: 40rpx;
+  margin-left: 24rpx;
+  margin-right: 24rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32rpx;
+  font-size: $uni-font-size-lg;
+  font-weight: 500;
+
+  &::after {
+    border: none;
+  }
+
+  &:active {
+    background-color: $uni-bg-color-hover;
+  }
 }
 
+/* ===== 账号信息详情行 ===== */
 .info-item {
-  padding: 20rpx 0;
-  border-bottom: 1px solid #f5f5f5;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid $uni-border-color-split;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -883,106 +876,46 @@ export default {
 }
 
 .info-label {
-  font-size: 28rpx;
-  color: #666;
+  font-size: $uni-font-size-base;
+  color: $uni-text-color-grey;
 }
 
 .info-value {
-  font-size: 28rpx;
-  color: #333;
+  font-size: $uni-font-size-base;
+  color: $uni-text-color;
   max-width: 70%;
   text-align: right;
   word-break: break-all;
 }
 
-/* 自定义弹窗样式 */
-.custom-popup {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.popup-mask {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.6);
-}
-
-.popup-content {
-  width: 650rpx;
-  background-color: #fff;
-  border-radius: 20rpx;
-  overflow: hidden;
-  position: relative;
-  z-index: 1000;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
-  animation: popup-in 0.3s ease;
-}
-
-@keyframes popup-in {
-  from {
-    transform: scale(0.8);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.popup-header {
-  padding: 30rpx;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #f5f5f5;
-}
-
-.popup-title {
-  font-size: 36rpx;
-  font-weight: bold;
-  color: #333;
-}
-
-.popup-close {
-  font-size: 48rpx;
-  color: #999;
-  line-height: 1;
-}
-
-.popup-body {
-  padding: 30rpx;
-}
-
+/* ===== 弹窗表单（弹窗外壳样式见 common.scss .lf-popup） ===== */
 .form-item {
   margin-bottom: 30rpx;
 }
 
 .form-label {
-  font-size: 30rpx;
-  color: #333;
-  margin-bottom: 15rpx;
+  font-size: $uni-font-size-base;
+  color: $uni-text-color;
+  margin-bottom: 14rpx;
   display: block;
+  font-weight: 500;
 }
 
 .form-input {
   width: 100%;
-  height: 90rpx;
-  border: 1px solid #e5e5e5;
-  border-radius: 10rpx;
-  padding: 0 20rpx;
-  font-size: 30rpx;
+  height: 88rpx;
+  border: 2rpx solid transparent;
+  border-radius: $uni-radius-md;
+  padding: 0 24rpx;
+  font-size: $uni-font-size-base;
   box-sizing: border-box;
-  background-color: #f9f9f9;
+  background-color: $uni-bg-color-section;
+  transition: border-color 0.15s, background-color 0.15s;
+
+  &:focus {
+    border-color: $uni-color-primary;
+    background-color: $uni-bg-color;
+  }
 }
 
 .code-input-container {
@@ -997,46 +930,25 @@ export default {
 
 .code-btn {
   width: 200rpx;
-  height: 90rpx;
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  color: #fff;
-  border-radius: 10rpx;
-  font-size: 28rpx;
+  height: 88rpx;
+  background-color: $uni-color-primary;
+  color: $uni-text-color-inverse;
+  border-radius: $uni-radius-md;
+  font-size: $uni-font-size-base;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
+  border: none;
+
+  &::after {
+    border: none;
+  }
 }
 
 .code-btn[disabled] {
-  background: #cccccc;
-  color: #ffffff;
-}
-
-.popup-footer {
-  padding: 20rpx 30rpx 40rpx;
-  display: flex;
-  justify-content: space-between;
-}
-
-.popup-btn {
-  width: 45%;
-  height: 90rpx;
-  border-radius: 45rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32rpx;
-}
-
-.cancel-btn {
-  background-color: #f5f5f5;
-  color: #666;
-}
-
-.confirm-btn {
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  color: #fff;
+  background: $uni-text-color-secondary;
+  color: $uni-text-color-inverse;
 }
 
 .password-input-container {
@@ -1051,8 +963,7 @@ export default {
 
 .password-toggle {
   position: absolute;
-  right: 20rpx;
-  color: #007AFF;
-  font-size: 28rpx;
+  right: 24rpx;
+  color: $uni-text-color-grey;
 }
-</style> 
+</style>

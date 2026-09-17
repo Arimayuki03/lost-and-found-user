@@ -1,0 +1,634 @@
+/**
+ * 全局设计系统（App.vue 中 @import 注入）
+ *
+ * 2026-09-17 重设计：所有跨页公共结构收敛到 .lf-* 命名空间，
+ * 色值/圆角/阴影全部取自 uni.scss token。
+ * 页面在根节点/容器加对应类名启用，避免与页面自有同名类互相污染。
+ */
+
+/* ============================================================
+ * 基础原语：页面 / 卡片 / 区块标题
+ * ============================================================ */
+.lf-page {
+  min-height: 100vh;
+  background-color: $uni-bg-color-grey;
+  box-sizing: border-box;
+}
+
+.lf-card {
+  background-color: $uni-bg-color;
+  border-radius: $uni-border-radius-card;
+  box-shadow: $uni-shadow-card;
+}
+
+/* 卡片区块头：左标题右操作（.lf-card 内使用） */
+.lf-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 28rpx $uni-spacing-card 0;
+
+  .lf-section-title {
+    font-size: $uni-font-size-md;
+    font-weight: 600;
+    color: $uni-text-color;
+    display: flex;
+    align-items: center;
+
+    /* 标题前品牌色短竖条 */
+    &::before {
+      content: '';
+      width: 8rpx;
+      height: 28rpx;
+      border-radius: 4rpx;
+      background: $uni-color-primary;
+      margin-right: 14rpx;
+    }
+  }
+
+  .lf-section-more {
+    display: flex;
+    align-items: center;
+    font-size: $uni-font-size-caption;
+    color: $uni-text-color-grey;
+
+    &:active {
+      color: $uni-color-primary;
+    }
+  }
+}
+
+/* ============================================================
+ * 列表行 cell：图标 + 主文本 + 副文本/值 + 箭头（我的/设置类列表）
+ * ============================================================ */
+.lf-cell-group {
+  background-color: $uni-bg-color;
+  border-radius: $uni-border-radius-card;
+  box-shadow: $uni-shadow-card;
+  overflow: hidden;
+}
+
+.lf-cell {
+  display: flex;
+  align-items: center;
+  min-height: 108rpx;
+  padding: 20rpx $uni-spacing-card;
+  background-color: $uni-bg-color;
+  transition: background-color 0.15s;
+
+  &:active {
+    background-color: $uni-bg-color-hover;
+  }
+
+  & + .lf-cell {
+    border-top: 1rpx solid $uni-border-color-split;
+  }
+
+  .lf-cell-title {
+    flex: 1;
+    min-width: 0;
+    font-size: $uni-font-size-md;
+    color: $uni-text-color;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .lf-cell-value {
+    max-width: 55%;
+    font-size: $uni-font-size-base;
+    color: $uni-text-color-grey;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-left: 16rpx;
+  }
+
+  .lf-cell-arrow {
+    flex-shrink: 0;
+    margin-left: 8rpx;
+  }
+}
+
+/* ============================================================
+ * 分段控件 segmented control（首页/发布/我的发布 的 tab 统一样式）
+ * ============================================================ */
+.lf-segment {
+  display: flex;
+  background-color: $uni-bg-color-section;
+  border-radius: $uni-radius-md;
+  padding: 6rpx;
+
+  .lf-segment-item {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 68rpx;
+    border-radius: 12rpx;
+    font-size: $uni-font-size-base;
+    color: $uni-text-color-grey;
+    transition: all 0.2s;
+
+    &.active {
+      background-color: $uni-bg-color;
+      color: $uni-color-primary;
+      font-weight: 600;
+      box-shadow: 0 2rpx 8rpx rgba(31, 41, 55, 0.08);
+    }
+
+    &:active {
+      opacity: 0.8;
+    }
+  }
+}
+
+/* ============================================================
+ * 按钮体系：主按钮实底 / 软按钮 tint / 描边 / 危险
+ * 渐变不再用于按钮，仅用于 hero 区域
+ * ============================================================ */
+.lf-btn-primary {
+  height: 88rpx;
+  border-radius: $uni-border-radius-btn;
+  background-color: $uni-color-primary;
+  color: $uni-text-color-inverse;
+  font-size: $uni-font-size-md;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: $uni-shadow-btn;
+  border: none;
+  line-height: 1;
+  transition: all 0.15s;
+
+  &:active {
+    background-color: $uni-color-primary-deep;
+    transform: scale(0.98);
+  }
+
+  &[disabled] {
+    opacity: $uni-opacity-disabled;
+    box-shadow: none;
+  }
+
+  /* 清除 uni button 默认 ::after 边框 */
+  &::after {
+    border: none;
+  }
+}
+
+.lf-btn-soft {
+  height: 88rpx;
+  border-radius: $uni-border-radius-btn;
+  background-color: $uni-color-primary-soft;
+  color: $uni-color-primary;
+  font-size: $uni-font-size-md;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  line-height: 1;
+
+  &:active {
+    opacity: 0.7;
+  }
+
+  &::after {
+    border: none;
+  }
+}
+
+.lf-btn-ghost {
+  height: 88rpx;
+  border-radius: $uni-border-radius-btn;
+  background-color: $uni-bg-color;
+  color: $uni-text-color;
+  font-size: $uni-font-size-md;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid $uni-border-color;
+  line-height: 1;
+
+  &:active {
+    background-color: $uni-bg-color-hover;
+  }
+
+  &::after {
+    border: none;
+  }
+}
+
+.lf-btn-danger {
+  height: 88rpx;
+  border-radius: $uni-border-radius-btn;
+  background-color: $uni-color-error-soft;
+  color: $uni-color-error;
+  font-size: $uni-font-size-md;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  line-height: 1;
+
+  &:active {
+    opacity: 0.7;
+  }
+
+  &::after {
+    border: none;
+  }
+}
+
+/* 小号软按钮（卡片内联操作，如"更多""清除筛选"） */
+.lf-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 48rpx;
+  padding: 0 22rpx;
+  border-radius: 24rpx;
+  font-size: $uni-font-size-caption;
+  background-color: $uni-color-primary-soft;
+  color: $uni-color-primary;
+
+  &:active {
+    opacity: 0.7;
+  }
+
+  &.lf-chip-plain {
+    background-color: $uni-bg-color-section;
+    color: $uni-text-color-grey;
+  }
+}
+
+/* ============================================================
+ * 表单字段：浅底圆角输入框（发布/编辑/弹窗内统一）
+ * ============================================================ */
+.lf-field {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 88rpx;
+  background-color: $uni-bg-color-section;
+  border: 2rpx solid transparent;
+  border-radius: $uni-radius-md;
+  padding: 0 24rpx;
+  font-size: $uni-font-size-base;
+  color: $uni-text-color;
+  transition: border-color 0.15s, background-color 0.15s;
+
+  &:focus {
+    border-color: $uni-color-primary;
+    background-color: $uni-bg-color;
+  }
+}
+
+.lf-field-textarea {
+  min-height: 200rpx;
+  padding: 20rpx 24rpx;
+  line-height: 1.6;
+}
+
+/* 表单项：label + 控件（页面 scoped 内可复用此结构类） */
+.lf-form-item {
+  margin-bottom: 32rpx;
+
+  .lf-form-label {
+    display: block;
+    font-size: $uni-font-size-base;
+    font-weight: 500;
+    color: $uni-text-color;
+    margin-bottom: 16rpx;
+
+    &.required::before {
+      content: '*';
+      color: $uni-color-error;
+      margin-right: 6rpx;
+    }
+  }
+}
+
+/* ============================================================
+ * 弹窗体系（my / feedback 共用）：底部滑入式 action sheet 风格
+ * ============================================================ */
+.lf-popup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+
+  .lf-popup-mask {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    animation: lf-fade-in 0.25s ease;
+  }
+
+  .lf-popup-content {
+    position: relative;
+    z-index: 1000;
+    width: 100%;
+    max-height: 82vh;
+    background-color: $uni-bg-color;
+    border-radius: 32rpx 32rpx 0 0;
+    overflow-y: auto;
+    animation: lf-slide-up 0.28s cubic-bezier(0.32, 0.72, 0.35, 1);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .lf-popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 32rpx $uni-spacing-card 20rpx;
+    position: sticky;
+    top: 0;
+    background-color: $uni-bg-color;
+    z-index: 1;
+
+    .lf-popup-title {
+      font-size: $uni-font-size-title;
+      font-weight: 600;
+      color: $uni-text-color;
+    }
+
+    .lf-popup-close {
+      width: 56rpx;
+      height: 56rpx;
+      border-radius: 50%;
+      background-color: $uni-bg-color-section;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      &:active {
+        background-color: $uni-bg-color-hover;
+      }
+    }
+  }
+
+  .lf-popup-body {
+    padding: 10rpx $uni-spacing-card 20rpx;
+  }
+
+  .lf-popup-footer {
+    display: flex;
+    gap: 24rpx;
+    padding: 20rpx $uni-spacing-card calc(32rpx + env(safe-area-inset-bottom));
+
+    .lf-popup-btn {
+      flex: 1;
+    }
+  }
+}
+
+@keyframes lf-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes lf-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* 旧页面仍在引用的动画名保留（居中弹窗淡入放大） */
+@keyframes popup-in {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ============================================================
+ * 骨架屏（首页/消息/详情首屏加载占位）
+ * ============================================================ */
+.skeleton-block {
+  background: linear-gradient(90deg, #eef1f5 25%, #e3e8ef 37%, #eef1f5 63%);
+  background-size: 400% 100%;
+  animation: lf-breathe 1.4s ease infinite;
+  border-radius: $uni-radius-sm;
+}
+
+@keyframes lf-breathe {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+/* ============================================================
+ * 认证表单（login/register/reset-password 根节点加 .lf-auth-page）
+ * ============================================================ */
+.lf-auth-page {
+  .form-container {
+    margin: -60rpx 32rpx 0;
+    padding: 48rpx 40rpx;
+    background-color: $uni-bg-color;
+    border-radius: $uni-border-radius-card;
+    box-shadow: $uni-shadow-card;
+    position: relative;
+    z-index: 1; /* 压在 hero 之上形成叠层 */
+  }
+
+  .form-item {
+    margin-bottom: 36rpx;
+    position: relative;
+  }
+
+  .label {
+    font-size: $uni-font-size-base;
+    color: $uni-text-color;
+    margin-bottom: 14rpx;
+    display: block;
+    font-weight: 500;
+  }
+
+  .input {
+    width: 100%;
+    box-sizing: border-box;
+    height: 88rpx;
+    background-color: $uni-bg-color-section;
+    border: 2rpx solid transparent;
+    border-radius: $uni-radius-md;
+    padding: 0 24rpx;
+    font-size: $uni-font-size-base;
+    color: $uni-text-color;
+    transition: border-color 0.15s, background-color 0.15s;
+
+    &:focus {
+      border-color: $uni-color-primary;
+      background-color: $uni-bg-color;
+    }
+  }
+}
+
+/* ============================================================
+ * 物品卡片（index/my-publish 列表容器加 .lf-card-list）
+ * ============================================================ */
+.lf-card-list {
+  .item-card {
+    display: flex;
+    background-color: $uni-bg-color;
+    border-radius: $uni-border-radius-card;
+    padding: 20rpx;
+    margin-bottom: 20rpx;
+    box-shadow: $uni-shadow-card;
+    width: calc(100% - 20rpx);
+    box-sizing: border-box;
+    margin-left: auto;
+    margin-right: auto;
+    transition: transform 0.15s, box-shadow 0.15s;
+
+    &:active {
+      transform: scale(0.98);
+      box-shadow: 0 2rpx 8rpx rgba(31, 41, 55, 0.06);
+    }
+  }
+
+  .item-image {
+    width: 160rpx;
+    height: 160rpx;
+    border-radius: $uni-radius-sm;
+    margin-right: 20rpx;
+    flex-shrink: 0;
+    background-color: $uni-bg-color-section;
+  }
+
+  .item-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    width: calc(100% - 180rpx);
+    max-width: calc(100% - 180rpx);
+  }
+
+  .item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10rpx;
+    width: 100%;
+    overflow: visible;
+  }
+
+  .item-name {
+    font-size: $uni-font-size-md;
+    color: $uni-text-color;
+    font-weight: 600;
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 50%;
+  }
+
+  .item-desc {
+    font-size: $uni-font-size-sm;
+    color: $uni-text-color-grey;
+    margin-bottom: 10rpx;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.5;
+  }
+
+  .item-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+    width: 100%;
+  }
+
+  .item-location {
+    font-size: $uni-font-size-caption;
+    color: $uni-text-color-grey;
+    flex: 1; /* 占满剩余宽度，超长地点省略号截断，避免盖到右侧时间 */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* ============================================================
+ * 未登录引导块（chat-list/publish 根节点加 .lf-login-guide）
+ * ============================================================ */
+.lf-login-guide {
+  .login-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-top: 200rpx;
+  }
+
+  .login-image {
+    width: 200rpx;
+    height: 200rpx;
+    margin-bottom: 40rpx;
+  }
+
+  .login-tips {
+    font-size: $uni-font-size-md;
+    color: $uni-text-color-grey;
+    margin-bottom: 40rpx;
+  }
+
+  .login-btns {
+    display: flex;
+    justify-content: center;
+    width: 500rpx;
+    margin-top: 30rpx;
+    gap: 40rpx;
+  }
+
+  .btn {
+    width: 220rpx;
+    height: 88rpx;
+    font-size: $uni-font-size-md;
+    border-radius: $uni-border-radius-btn;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+
+    &:active {
+      transform: scale(0.97);
+    }
+  }
+
+  .login-btn {
+    background-color: $uni-color-primary;
+    color: $uni-text-color-inverse;
+    box-shadow: $uni-shadow-btn;
+  }
+
+  .register-btn {
+    background-color: $uni-color-primary-soft;
+    color: $uni-color-primary;
+    border: none;
+  }
+}

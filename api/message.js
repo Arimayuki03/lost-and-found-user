@@ -68,8 +68,22 @@ export function markAsRead(messageId) {
 }
 
 /**
+ * 将会话中对方发来的全部未读消息标记为已读
+ * （进入会话时调用；单条 markAsRead 只能覆盖已加载的最近一页，
+ * 历史页之外的旧未读必须用本接口一次性清零）
+ * @param {string|number} partnerId 对方用户ID
+ * @returns {Promise} { success, marked }
+ */
+export function markConversationAsRead(partnerId) {
+  return request({
+    url: `/user/chat/read/${partnerId}`,
+    method: 'POST'
+  });
+}
+
+/**
  * 获取当前用户的未读消息数量
- * @returns {Promise} 返回未读消息数量的Promise对象
+ * @returns {Promise} 未读数量
  */
 export function getUnreadCount() {
   return request({
@@ -84,5 +98,6 @@ export default {
   getChatHistory,
   sendMessage,
   markAsRead,
+  markConversationAsRead,
   getUnreadCount
 }; 

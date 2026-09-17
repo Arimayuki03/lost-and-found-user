@@ -1,14 +1,7 @@
 <template>
-  <view class="login-container">
-    <!-- 顶部背景 -->
-    <view class="top-bg" :style="{ paddingTop: statusBarHeight + 60 + 'rpx' }">
-      <!-- 返回按钮 -->
-      <view class="back-btn" :style="{ top: statusBarHeight + 20 + 'rpx' }" @tap="goBack">
-        <text class="back-text">&lt;</text>
-      </view>
-      <image class="logo" src="/static/logo.png" mode="aspectFit"></image>
-      <text class="title">校园失物招领</text>
-    </view>
+  <view class="login-container lf-auth-page">
+    <!-- 顶部背景（三页共用组件） -->
+    <lf-auth-header title="校园失物招领" subtitle="登录后可发布与联系" />
     
     <!-- 登录表单 -->
     <view class="form-container">
@@ -24,30 +17,28 @@
         />
       </view>
       
-      <!-- 密码输入框 -->
+      <!-- 密码输入框（眼睛图标切换明文/密文） -->
       <view class="form-item">
         <text class="label">密码</text>
-        <input 
-          v-if="showPassword"
-          class="input" 
-          type="text" 
-          v-model="form.password" 
-          placeholder="请输入密码"
-        />
-        <input 
-          v-else
-          class="input" 
-          type="password" 
-          v-model="form.password" 
-          placeholder="请输入密码"
-        />
-        <text class="password-toggle" @tap="togglePasswordVisibility">
-          {{ showPassword ? '隐藏' : '显示' }}
-        </text>
+        <view class="password-wrap">
+          <input 
+            class="input password-input" 
+            :password="!showPassword"
+            v-model="form.password" 
+            placeholder="请输入密码"
+          />
+          <uni-icons 
+            class="password-toggle" 
+            :type="showPassword ? 'eye-slash' : 'eye'" 
+            :size="22" 
+            :color="colorGrey" 
+            @click="togglePasswordVisibility" 
+          />
+        </view>
       </view>
       
       <!-- 登录按钮 -->
-      <button class="login-btn" @tap="handleLogin">登录</button>
+      <button class="submit-btn" @tap="handleLogin">登录</button>
       
       <!-- 辅助操作 -->
       <view class="actions">
@@ -66,6 +57,7 @@
 <script>
 import { mapActions } from 'vuex';
 
+import { COLOR_GREY, COLOR_SECONDARY } from '@/config/ui';
 /**
  * 用户登录组件
  * 处理用户认证流程
@@ -73,48 +65,20 @@ import { mapActions } from 'vuex';
 export default {
   data() {
     return {
+      colorGrey: COLOR_GREY, // 辅助图标灰（与 $uni-text-color-grey 同步）
+      colorSecondary: COLOR_SECONDARY, // 更弱一级灰（箭头/占位图标）
       // 表单数据
       form: {
         student_id: '', // 学号
         password: '' // 密码
       },
-      showPassword: false, // 是否显示密码明文
-      statusBarHeight: 20 // 状态栏高度，默认20
+      showPassword: false // 是否显示密码明文
     };
-  },
-  
-  /**
-   * 页面加载时初始化
-   */
-  onLoad() {
-    // 获取系统信息设置状态栏高度
-    this.setStatusBarHeight();
   },
   
   methods: {
     // 导入Vuex actions
     ...mapActions(['login']),
-    
-    /**
-     * 设置状态栏高度
-     * 获取系统信息并调整UI布局
-     */
-    setStatusBarHeight() {
-      try {
-        const systemInfo = uni.getSystemInfoSync();
-        this.statusBarHeight = systemInfo.statusBarHeight || 20;
-      } catch (error) {
-        // 获取失败时使用默认值
-        this.statusBarHeight = 20;
-      }
-    },
-    
-    /**
-     * 返回上一页
-     */
-    goBack() {
-      uni.navigateBack();
-    },
     
     /**
      * 切换密码显示状态
@@ -158,10 +122,10 @@ export default {
           });
         }, 1500);
       } catch (error) {
-        // 登录失败（api 层 401 时 reject 的是响应体本身，错误信息在 error.error）
+        // 登录失败（api 层 401 时 reject 的是响应体本身；后端登录接口用 message 字段，其余接口用 error 字段，两者都兼容）
         uni.hideLoading();
         uni.showToast({
-          title: (error && error.error) || '登录失败，请稍后再试',
+          title: (error && (error.error || error.message)) || '登录失败，请稍后再试',
           icon: 'none'
         });
       }
@@ -212,121 +176,56 @@ export default {
 };
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 /* 登录页容器 */
 .login-container {
   min-height: 100vh;
-  background-color: #f8f8f8;
+  background-color: $uni-bg-color-grey;
   display: flex;
   flex-direction: column;
   padding-bottom: 40rpx;
   box-sizing: border-box;
 }
 
-/* 顶部背景区域 */
-.top-bg {
-  height: auto; /* 自适应高度 */
-  min-height: 200rpx; /* 最小高度 */
-  padding-bottom: 30rpx; /* 底部内边距 */
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-bottom-left-radius: 40rpx;
-  border-bottom-right-radius: 40rpx;
-  position: relative;
-  margin-bottom: 40rpx; /* 底部外边距 */
-}
-
-/* 返回按钮 */
-.back-btn {
-  position: absolute;
-  left: 30rpx;
-  width: 60rpx;
-  height: 60rpx;
-  background-color: rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-
-/* 返回按钮文本 */
-.back-text {
-  font-size: 40rpx;
-  color: #fff;
-  font-weight: bold;
-  line-height: 1;
-}
-
-/* 应用logo */
-.logo {
-  width: 100rpx;
-  height: 100rpx;
-  margin-bottom: 15rpx;
-}
-
-/* 应用标题 */
-.title {
-  font-size: 36rpx;
-  color: #fff;
-  font-weight: bold;
-}
-
-/* 表单容器 */
-.form-container {
-  margin: 0 40rpx;
-  padding: 40rpx;
-  background-color: #fff;
-  border-radius: 20rpx;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
-  z-index: 1; /* 确保表单在顶部背景之上 */
-}
-
-/* 表单项 */
-.form-item {
-  margin-bottom: 30rpx;
+/* 密码输入行 */
+.password-wrap {
   position: relative;
 }
 
-/* 表单标签 */
-.label {
-  font-size: 28rpx;
-  color: #333;
-  margin-bottom: 10rpx;
-  display: block;
+.password-input {
+  padding-right: 80rpx;
 }
 
-/* 输入框 */
-.input {
-  height: 90rpx;
-  border-bottom: 1px solid #e5e5e5;
-  font-size: 30rpx;
-  color: #333;
-}
-
-/* 密码显示切换按钮 */
 .password-toggle {
   position: absolute;
-  right: 0;
-  bottom: 30rpx;
-  font-size: 28rpx;
-  color: #007AFF;
+  right: 24rpx;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 /* 登录按钮 */
-.login-btn {
-  height: 90rpx;
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  color: #fff;
-  border-radius: 45rpx;
-  font-size: 32rpx;
+.submit-btn {
+  height: 92rpx;
+  background-color: $uni-color-primary;
+  color: $uni-text-color-inverse;
+  border-radius: $uni-border-radius-btn;
+  font-size: $uni-font-size-lg;
+  font-weight: 500;
   margin-top: 60rpx;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: $uni-shadow-btn;
+  border: none;
+
+  &::after {
+    border: none;
+  }
+
+  &:active {
+    background-color: $uni-color-primary-deep;
+    transform: scale(0.99);
+  }
 }
 
 /* 辅助操作区域 */
@@ -338,8 +237,8 @@ export default {
 
 /* 辅助操作文本 */
 .action-text {
-  font-size: 28rpx;
-  color: #007AFF;
+  font-size: $uni-font-size-base;
+  color: $uni-color-primary;
 }
 
 /* 页脚区域 */
@@ -351,7 +250,7 @@ export default {
 
 /* 页脚文本 */
 .footer-text {
-  font-size: 24rpx;
-  color: #999;
+  font-size: $uni-font-size-caption;
+  color: $uni-text-color-grey;
 }
-</style> 
+</style>

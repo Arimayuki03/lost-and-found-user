@@ -13,8 +13,8 @@ dist/
 npm-debug.log*
 
 # 环境变量（含敏感配置时启用）
-# .env
-# .env.local
+.env
+.env.local
 
 # 编辑器/系统
 .DS_Store

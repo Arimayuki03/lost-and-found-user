@@ -115,16 +115,20 @@ export const saveToken = (token) => {
 };
 
 /**
- * 退出登录并清除用户凭证
+ * 更新底部"消息"tab 的未读角标（tabBar 顺序：首页0/发布1/消息2/我的3）
+ * 非 tabBar 页调用或参数非法时静默忽略
+ * @param {Number} total 未读总数，<=0 时移除角标
  */
-export const logout = () => {
-  uni.removeStorageSync('token');
-  uni.removeStorageSync('refreshToken');
-  uni.removeStorageSync('userInfo');
-  
-  uni.reLaunch({
-    url: '/pages/login/login'
-  });
+export const updateMessageBadge = (total) => {
+  try {
+    if (total > 0) {
+      uni.setTabBarBadge({ index: 2, text: total > 99 ? '99+' : String(total) });
+    } else {
+      uni.removeTabBarBadge({ index: 2 });
+    }
+  } catch (e) {
+    // 当前页不是 tabBar 页等场景下调用会失败，忽略
+  }
 };
 
 /**

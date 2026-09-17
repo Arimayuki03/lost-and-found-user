@@ -7,12 +7,13 @@
       :scroll-top="scrollTop"
       :scroll-into-view="scrollIntoView"
       @scrolltoupper="loadMoreMessages"
+      @scroll="handleScroll"
       upper-threshold="50"
       v-if="currentUser"
       :id="'chat-scroll-view'"
       :scroll-with-animation="false"
       :enhanced="true"
-      :show-scrollbar="true"
+      :show-scrollbar="false"
       enable-back-to-top
     >
       <!-- 加载更多提示 -->
@@ -20,8 +21,8 @@
         <text class="loading-text">{{ isLoadingMore ? '加载中...' : '加载更多...' }}</text>
       </view>
       
-      <!-- 消息列表 -->
-      <view class="message-list">
+      <!-- 消息列表：定位完成前保持隐藏，避免"先渲染顶部再跳到底部"的抖动 -->
+      <view class="message-list" :style="{ visibility: listVisible ? 'visible' : 'hidden' }">
         <block v-for="(item, index) in messages" :key="index">
           <!-- 显示时间，如果是第一条消息或者与上一条消息时间间隔超过5分钟 -->
           <view class="time-divider" v-if="index === 0 || shouldShowTime(item, messages[index-1])">
@@ -54,9 +55,6 @@
       
       <!-- 底部填充区域，防止消息被输入框遮挡 -->
       <view class="bottom-padding"></view>
-      
-      <!-- 用于自动滚动的锚点 -->
-      <view id="scroll-bottom" style="height: 1px; width: 100%;"></view>
     </scroll-view>
     
     <!-- 未登录提示 -->
@@ -90,6 +88,11 @@ import { mapState, mapGetters, mapMutations } from 'vuex';
 import { checkLogin, goToLogin, formatDate } from '../../utils/common';
 import socketIOService from '@/utils/socketio.js'; // 引入Socket.IO服务
 
+// 会话阅读位置存储（微信行为：重新进入会话回到上次阅读位置，首次进入落在底部）
+const POSITION_STORAGE_KEY = 'chat_read_position_v1';
+// 恢复锚点时最多向前翻页的页数，防止极老锚点导致进入会话时长时间连续请求
+const RESTORE_PAGE_LIMIT = 5;
+
 export default {
   data() {
     return {
@@ -104,9 +107,10 @@ export default {
       scrollTop: 0, // 滚动位置
       scrollIntoView: '', // 滚动到指定元素
       loginChecking: false, // 是否正在检查登录状态
-      defaultAvatarUrl: '/static/logo.png', // 默认头像
+      defaultAvatarUrl: '/static/default-avatar.png', // 默认头像
       isActiveChat: false, // 当前页面是否活跃
-      initialScrollDone: false, // 是否已完成初始滚动
+      listVisible: false, // 消息列表是否可见（完成一次性定位后才显示，消除跳动）
+      atBottom: true, // 是否停留在消息底部（仅贴底时新消息才自动滚动，微信行为）
       isLoadingMore: false // 是否正在加载更多消息
     };
   },
@@ -138,17 +142,18 @@ export default {
     // 设置为活跃聊天界面
     this.isActiveChat = true;
     
+    // 首次 onShow 跳过刷新：初始定位由 onLoad 的 loadChatHistory 一次性完成，
+    // 二次滚动正是进入时抖动的来源
+    this._firstShow = true;
+    
     // 检查登录状态并初始化
     this.checkLoginAndInitialize();
   },
   
-  // 页面准备就绪时执行
-  onReady() {
-    // 页面渲染完成，确保滚动到底部
-    this.ensureScrollToBottom();
-  },
-  
   onUnload() {
+    // 离开前记录阅读位置，下次进入该会话原位恢复（微信行为）
+    this.captureAndSavePosition();
+    
     // 标记为非活跃状态
     this.isActiveChat = false;
     
@@ -162,9 +167,40 @@ export default {
 
     // 清理WebSocket
     this.cleanupWebSocket();
+
+    // 停止 HTTP 轮询兜底（仅小程序端会启动轮询；H5 端此调用为空操作）
+    this.stopPollingTimer();
+  },
+
+  /**
+   * 小程序端轮询兜底定时器：Socket 推送降级后，页面活跃期间每 15 秒拉一次新消息。
+   * 注意：方法体无条件保留——H5 端的启动调用（onShow 内）被 #ifdef 剥离，
+   * 此处若也用 #ifdef 剥离会导致 onHide/onUnload 引用 undefined 报错
+   */
+  startPollingTimer() {
+    // 防重入：先清旧定时器再起新的
+    this.stopPollingTimer();
+    this._pollTimerId = setInterval(() => {
+      // 页面已隐藏/销毁时自清理，避免空转
+      if (!this.isActiveChat) {
+        this.stopPollingTimer();
+        return;
+      }
+      this.refreshMessages();
+    }, 15000);
+  },
+
+  stopPollingTimer() {
+    if (this._pollTimerId) {
+      clearInterval(this._pollTimerId);
+      this._pollTimerId = null;
+    }
   },
 
   onHide() {
+    // 页面隐藏同样记录阅读位置
+    this.captureAndSavePosition();
+
     // 标记为非活跃状态
     this.isActiveChat = false;
 
@@ -175,11 +211,14 @@ export default {
     if (this.targetUserId) {
       socketIOService.leaveChatTargetRoom(this.targetUserId);
     }
-    
+
     // 清理WebSocket
     this.cleanupWebSocket();
+
+    // 停止 HTTP 轮询兜底（仅小程序端会启动轮询；H5 端此调用为空操作）
+    this.stopPollingTimer();
   },
-  
+
   onShow() {
     // 标记为活跃状态
     this.isActiveChat = true;
@@ -194,15 +233,24 @@ export default {
     
     // 如果用户已登录
     if (this.currentUser && this.currentUser.id) {
-      // 立即刷新一次消息和重新连接WebSocket
-      this.refreshMessages();
-      
-      // 确保滚动到底部
-      this.ensureScrollToBottom();
-      
+      // 首次进入不刷新：loadChatHistory 正在加载并定位，重复刷新会导致二次滚动抖动；
+      // 从其它页面返回时（非首次）才增量拉取新消息
+      if (this._firstShow) {
+        this._firstShow = false;
+      } else {
+        this.refreshMessages();
+      }
+
       // 初始化WebSocket
       this.initWebSocket();
+
+      // #ifdef MP-WEIXIN
+      // 小程序端 Socket 推送不可用（见 socketio.js 降级说明），
+      // 停留本页期间用轻量 HTTP 轮询补偿接收新消息（H5 端不轮询，靠 Socket 推送）
+      this.startPollingTimer();
+      // #endif
     } else {
+      this._firstShow = false;
       // 如果用户未登录，尝试获取用户信息
       this.checkLoginAndInitialize();
     }
@@ -263,9 +311,6 @@ export default {
     
     // 初始化聊天功能
     initializeChat() {
-      // 重置初始滚动标记
-      this.initialScrollDone = false;
-      
       // 获取聊天对象信息
       this.getTargetUserInfo();
       
@@ -286,36 +331,72 @@ export default {
       });
     },
     
-    // 加载聊天历史记录
+    // 加载聊天历史记录，并在"渲染完成→一次性定位→再显示"后揭示列表。
+    // 微信行为：上次贴底则落到底部；上次停在历史中间则回到同一锚点消息顶部。
     async loadChatHistory() {
       uni.showLoading({
         title: '加载中...'
       });
       
       try {
-        // 调用API获取聊天记录
-        const res = await this.$api.message.getChatHistory(this.targetUserId, {
-          offset: this.offset,
-          limit: this.limit
+        // 进入会话即把对方发来的全部未读一次性标为已读（含最近一页之外的历史未读）。
+        // 修复：原先只逐条标记已加载的最近 20 条，旧未读永远清不掉，
+        // 从聊天列表点进会话查看后退出，红点依然存在。
+        // 失败不阻断加载流程，后续逐条 markNewMessagesAsRead 仍会兜底。
+        try {
+          await this.$api.message.markConversationAsRead(this.targetUserId);
+        } catch (markError) {
+          // 批量已读失败时静默，走原有逐条标记逻辑
+        }
+        
+        const saved = this.getSavedPosition();
+        const needAnchor = !!(saved && !saved.atBottom && saved.anchorId);
+        
+        // 需要恢复锚点时，向后翻页直到锚点消息进入列表（有页数上限兜底）
+        let allMessages = [];
+        let offset = 0;
+        let hasMore = true;
+        let anchorFound = false;
+        while (hasMore) {
+          const res = await this.$api.message.getChatHistory(this.targetUserId, {
+            offset,
+            limit: this.limit
+          });
+          const page = (res && Array.isArray(res.messages)) ? res.messages : [];
+          allMessages = allMessages.concat(page);
+          hasMore = page.length >= this.limit;
+          offset += this.limit;
+          if (!needAnchor) break;
+          anchorFound = allMessages.some(m => String(m.id) === String(saved.anchorId));
+          if (anchorFound || allMessages.length >= RESTORE_PAGE_LIMIT * this.limit) break;
+        }
+        
+        // 设置消息列表（按时间升序）
+        this.messages = allMessages.sort((a, b) => {
+          return this.parseTime(a.timestamp) - this.parseTime(b.timestamp);
         });
         
-        if (res && res.messages) {
-          // 设置消息列表
-          this.messages = res.messages.sort((a, b) => {
-            return this.parseTime(a.timestamp) - this.parseTime(b.timestamp);
-          });
+        // 设置是否有更多消息；loadMoreMessages 会先 offset += limit 再请求，这里回退一页
+        this.hasMoreMessages = hasMore;
+        this.offset = Math.max(0, offset - this.limit);
         
-          // 设置是否有更多消息
-          this.hasMoreMessages = res.messages.length >= this.limit;
-          
-          // 标记收到的消息为已读
-          this.markNewMessagesAsRead();
+        // 标记收到的消息为已读（批量接口失败时的逐条兜底）
+        this.markNewMessagesAsRead();
         
-          // 多次尝试滚动到底部
-          if (this.messages.length > 0) {
-            this.initialScrollAttempts();
-          }
+        // 一次性定位：列表先保持隐藏，滚动落位后再揭示，杜绝"顶部→底部"反复跳动
+        await this.$nextTick();
+        if (needAnchor && anchorFound) {
+          // 先清空再赋值，保证与上次恢复同一锚点时 watch 仍能触发
+          this.scrollIntoView = '';
+          await this.$nextTick();
+          this.scrollIntoView = 'msg-' + saved.anchorId;
+          this.atBottom = false;
+        } else {
+          this.scrollToBottom();
         }
+        await this.$nextTick();
+        this.measureViewport();
+        this.listVisible = true;
         
         uni.hideLoading();
       } catch (error) {
@@ -325,49 +406,6 @@ export default {
           icon: 'none'
         });
       }
-    },
-    
-    // 初始加载时多次尝试滚动
-    initialScrollAttempts() {
-      // 立即滚动一次
-      if (this.messages.length > 0) {
-        const lastMessage = this.messages[this.messages.length - 1];
-        this.scrollIntoView = `msg-${lastMessage.id}`;
-        this.scrollTop = 999999;
-      }
-      
-      // 延迟多次滚动确保成功
-      this._scrollTimerIds = this._scrollTimerIds || [];
-      const times = [100, 300, 600, 1000, 1500, 2000];
-      times.forEach(time => {
-        const timerId = setTimeout(() => {
-          if (this.messages.length > 0) {
-            // 直接修改scrollTop变量
-            this.scrollTop = 999999 + time; // 加上time确保每次值不同，触发滚动
-            
-            // 交替使用scrollIntoView
-            const lastMessage = this.messages[this.messages.length - 1];
-            if (time % 400 === 0) {
-              this.scrollIntoView = `msg-${lastMessage.id}`;
-            } else {
-              this.scrollIntoView = 'scroll-bottom';
-            }
-            
-            // 使用uni.pageScrollTo辅助滚动
-            uni.pageScrollTo({
-              scrollTop: 999999,
-              duration: 0
-            });
-          }
-        }, time);
-        this._scrollTimerIds.push(timerId);
-      });
-
-      // 标记已完成初始滚动
-      const doneTimerId = setTimeout(() => {
-        this.initialScrollDone = true;
-      }, 2500);
-      this._scrollTimerIds.push(doneTimerId);
     },
     
     // 初始化WebSocket连接
@@ -453,12 +491,6 @@ export default {
         this._joinRoomTimeoutId = null;
       }
 
-      // 清除初始滚动的重试定时器
-      if (this._scrollTimerIds && this._scrollTimerIds.length) {
-        this._scrollTimerIds.forEach(id => clearTimeout(id));
-        this._scrollTimerIds = [];
-      }
-
       // 清空socketio服务中的当前聊天对象
       socketIOService.clearCurrentChatTarget();
 
@@ -526,8 +558,11 @@ export default {
           this.markMessageAsRead(data.id, data.sender_id);
         }
 
-        // 滚动到底部
-        this.scrollToBottom();
+        // 仅贴底或自己刚发的消息才滚动到底部；
+        // 用户上翻阅读历史时新消息到达不打断（微信行为）
+        if (this.atBottom || sid === mid) {
+          this.scrollToBottom();
+        }
       }
     },
     
@@ -690,6 +725,11 @@ export default {
               this.markMessageAsRead(msg.id, msg.sender_id);
             }
           });
+          
+          // 仅贴底时跟随新消息滚动，阅读历史中不打断（微信行为）
+          if (this.atBottom) {
+            this.scrollToBottom();
+          }
         }
       } catch (error) {
         // 处理错误
@@ -728,10 +768,14 @@ export default {
           // 设置是否有更多消息
           this.hasMoreMessages = res.messages.length >= this.limit;
           
-          // 在消息渲染后滚动到之前的位置
+          // 在消息渲染后滚动到之前的位置：
+          // 先清空再赋值，保证连续两次加载都以同一消息为锚点时 watch 仍会触发
           if (firstMsgId) {
             this.$nextTick(() => {
-              this.scrollIntoView = `msg-${firstMsgId}`;
+              this.scrollIntoView = '';
+              this.$nextTick(() => {
+                this.scrollIntoView = `msg-${firstMsgId}`;
+              });
             });
           }
         } else {
@@ -746,36 +790,103 @@ export default {
       }
     },
     
-    // 滚动到底部
+    // 滚动到底部：单步同步定位。
+    // 绑定值交替递增，确保每次都触发 watch；不再用重试定时器（抖动根源）
     scrollToBottom() {
       if (this.messages.length === 0) return;
-      
+      this.atBottom = true;
+      this._scrollToken = (this._scrollToken || 0) + 1;
+      this.scrollIntoView = '';
+      this.scrollTop = 999999 + this._scrollToken;
+    },
+    
+    // scroll-view 滚动事件：维护"是否贴底"状态，决定新消息是否自动跟随
+    handleScroll(e) {
+      const detail = e && e.detail;
+      if (!detail || !this._clientHeight) return;
+      this.atBottom = detail.scrollHeight - detail.scrollTop - this._clientHeight < 40;
+    },
+    
+    // 记录滚动容器可视高度（用于贴底判定）
+    measureViewport() {
+      uni.createSelectorQuery().in(this).select('#chat-scroll-view').boundingClientRect(rect => {
+        if (rect && rect.height) {
+          this._clientHeight = rect.height;
+        }
+      }).exec();
+    },
+    
+    // 会话唯一键：chat:小ID-大ID（与后端房间名规则一致）
+    roomKey() {
+      const me = this.currentUser && this.currentUser.id;
+      if (!me || !this.targetUserId) return null;
+      const ids = [Number(me), Number(this.targetUserId)].sort((a, b) => a - b);
+      if (isNaN(ids[0]) || isNaN(ids[1])) return null;
+      return `chat:${ids[0]}-${ids[1]}`;
+    },
+    
+    // 读取该会话上次记录的阅读位置 { atBottom, anchorId }
+    getSavedPosition() {
       try {
-        // 使用最后一条消息的ID
-        const lastMessage = this.messages[this.messages.length - 1];
-        this.scrollIntoView = `msg-${lastMessage.id}`;
-        
-        // 设置一个较大的scrollTop值以确保滚动到底部
-        this.scrollTop = 999999;
-        
-        // 页面渲染完毕后再次尝试滚动，确保一定会滚动到底部
-        this.$nextTick(() => {
-          this.scrollTop = 1000000;
-          this.scrollIntoView = 'scroll-bottom';
-        });
-      } catch (error) {
-        // 处理错误
+        const room = this.roomKey();
+        if (!room) return null;
+        const map = JSON.parse(uni.getStorageSync(POSITION_STORAGE_KEY) || '{}');
+        return map[room] || null;
+      } catch (e) {
+        return null;
       }
     },
     
-    // 初始加载时滚动到底部
-    initialScrollToBottom() {
-      this.scrollToBottom();
-      
-      // 延迟200ms再次滚动，确保在DOM渲染完成后滚动生效
-      setTimeout(() => {
-        this.scrollToBottom();
-      }, 200);
+    // 保存阅读位置（仅保留最近 50 个会话，防止存储无限膨胀）
+    savePosition(position) {
+      try {
+        const room = this.roomKey();
+        if (!room) return;
+        const map = JSON.parse(uni.getStorageSync(POSITION_STORAGE_KEY) || '{}');
+        map[room] = Object.assign({ ts: Date.now() }, position);
+        const keys = Object.keys(map);
+        if (keys.length > 50) {
+          keys.sort((a, b) => (map[a].ts || 0) - (map[b].ts || 0))
+            .slice(0, keys.length - 50)
+            .forEach(k => delete map[k]);
+        }
+        uni.setStorageSync(POSITION_STORAGE_KEY, JSON.stringify(map));
+      } catch (e) {
+        // 存储失败不影响聊天功能
+      }
+    },
+    
+    // 离开会话时记录阅读位置：贴底存标记；停在历史中则记录视口顶部第一条消息为锚点
+    captureAndSavePosition() {
+      if (!this.listVisible || !this.messages.length) return;
+      if (this.atBottom) {
+        this.savePosition({ atBottom: true });
+        return;
+      }
+      const query = uni.createSelectorQuery().in(this);
+      query.select('#chat-scroll-view').boundingClientRect();
+      query.selectAll('.message-item').boundingClientRect();
+      query.exec(res => {
+        try {
+          const container = res[0];
+          const rects = res[1];
+          if (!container || !Array.isArray(rects) || rects.length === 0) {
+            this.savePosition({ atBottom: true });
+            return;
+          }
+          // DOM 顺序与 messages 升序一致，取视口下边缘可见的第一条为锚点
+          const topEdge = container.top + 2;
+          let idx = rects.findIndex(r => r && r.bottom > topEdge);
+          if (idx === -1) idx = 0;
+          const anchor = this.messages[idx];
+          if (anchor && anchor.id !== undefined && anchor.id !== null &&
+              String(anchor.id).indexOf('temp-') !== 0) {
+            this.savePosition({ atBottom: false, anchorId: anchor.id });
+          }
+        } catch (e) {
+          // 定位查询异常时放弃本次记录
+        }
+      });
     },
     
     // 格式化时间显示
@@ -1114,14 +1225,6 @@ export default {
       */
     },
     
-    // 确保滚动到底部的方法 - 使用于onShow和onReady
-    ensureScrollToBottom() {
-      if (this.messages && this.messages.length > 0) {
-        // 初始加载时滚动到底部
-        this.initialScrollToBottom();
-      }
-    },
-    
     // 添加用户状态变化处理方法
     handleUserStatusChange(data) {
       if (!data || !data.user_id) {
@@ -1148,38 +1251,25 @@ export default {
 };
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 .chat-container {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #ededed;
+  background-color: $uni-bg-color-chat;
   box-sizing: border-box;
   position: relative;
-  padding-bottom: 80rpx; /* 从100rpx减少到80rpx */
-}
-
-.chat-header {
-  padding: 20rpx;
-  background-color: #fff;
-  border-bottom: 1px solid #eee;
-  text-align: center;
-}
-
-.chat-title {
-  font-size: 34rpx;
-  font-weight: bold;
-  color: #333;
+  padding-bottom: 110rpx; /* 与固定输入栏高度一致 */
 }
 
 .chat-scroll {
   flex: 1;
   padding: 15rpx 20rpx; /* 减少上下padding */
-  background-color: #ededed;
+  background-color: $uni-bg-color-chat;
   width: 100%;
   box-sizing: border-box;
   padding-bottom: 0; /* 将底部内边距从5rpx减少到0 */
-  height: calc(100vh - 100rpx); /* 调整为新的输入区域高度 */
+  height: calc(100vh - 110rpx); /* 与输入栏高度一致 */
 }
 
 .loading-more {
@@ -1189,7 +1279,7 @@ export default {
 
 .loading-text {
   font-size: 24rpx;
-  color: #999;
+  color: $uni-text-color-grey;
 }
 
 .message-list {
@@ -1211,11 +1301,11 @@ export default {
 
 .time-text {
   display: inline-block;
-  padding: 6rpx 16rpx;
-  font-size: 24rpx;
-  color: #999;
-  background-color: rgba(0, 0, 0, 0.05);
-  border-radius: 8rpx;
+  padding: 6rpx 18rpx;
+  font-size: 22rpx;
+  color: $uni-text-color-grey;
+  background-color: rgba(255, 255, 255, 0.75);
+  border-radius: $uni-radius-sm;
 }
 
 .message-item {
@@ -1235,7 +1325,7 @@ export default {
   width: 80rpx;
   height: 80rpx;
   border-radius: 50%;
-  background-color: #e1e1e1;
+  background-color: $uni-border-color-input;
   flex-shrink: 0;
   margin: 0 15rpx;
 }
@@ -1255,70 +1345,76 @@ export default {
 .message-bubble {
   max-width: 100%;
   padding: 18rpx 24rpx; /* 稍微减少气泡内部padding */
-  border-radius: 10rpx;
+  border-radius: $uni-radius-md;
   margin: 0 5rpx;
   position: relative;
-  background-color: #fff;
+  background-color: $uni-bg-color;
   word-break: break-all;
   box-shadow: 0 1rpx 2rpx rgba(0, 0, 0, 0.05);
 }
 
 .message-self .message-bubble {
-  background-color: #a0e75a;
-  border-radius: 10rpx;
+  background-color: $uni-color-chat-self;
+  border-radius: $uni-radius-md;
 }
 
 .message-content {
   font-size: 32rpx;
-  color: #222;
+  color: $uni-text-color-chat;
   line-height: 1.4;
   word-break: break-word;
   white-space: pre-wrap;
 }
 
 .message-status {
-  font-size: 20rpx;
-  color: #999;
+  font-size: $uni-font-size-caption;
+  color: $uni-text-color-grey;
   margin-top: 6rpx; /* 减少状态文本的上边距 */
   margin-right: 15rpx;
   line-height: 1;
 }
 
 .input-area {
-  height: 100rpx; /* 减少输入区域高度 */
-  background-color: #f7f7f7;
+  height: 110rpx; /* 输入区域高度 */
+  background-color: $uni-bg-color;
   display: flex;
   align-items: center;
-  padding: 0 20rpx;
-  border-top: 1px solid #e5e5e5;
+  padding: 0 24rpx;
+  border-top: 1rpx solid $uni-border-color-split;
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   z-index: 100;
-  box-shadow: 0 -2rpx 10rpx rgba(0, 0, 0, 0.05);
+  box-shadow: 0 -2rpx 10rpx rgba(31, 41, 55, 0.04);
 }
 
 .message-input {
   flex: 1;
-  height: 70rpx; /* 稍微减少输入框高度 */
-  background-color: #fff;
-  border-radius: 8rpx;
-  padding: 0 20rpx;
-  font-size: 30rpx;
-  border: 1rpx solid #e5e5e5;
+  height: 72rpx;
+  background-color: $uni-bg-color-section;
+  border-radius: 36rpx;
+  padding: 0 28rpx;
+  font-size: $uni-font-size-md;
+  border: none;
 }
 
 .send-btn {
-  width: 110rpx; /* 稍微减小发送按钮宽度 */
-  height: 70rpx; /* 减小发送按钮高度 */
-  line-height: 70rpx;
-  background-color: #07c160;
-  color: #fff;
-  border-radius: 8rpx;
-  margin-left: 15rpx; /* 减少发送按钮左边距 */
-  font-size: 28rpx;
+  width: 120rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  background-color: $uni-color-chat-send;
+  color: $uni-text-color-inverse;
+  border-radius: 36rpx;
+  margin-left: 16rpx;
+  font-size: $uni-font-size-base;
+  font-weight: 500;
   text-align: center;
+  border: none;
+
+  &::after {
+    border: none;
+  }
 }
 
 .login-tip {
@@ -1334,15 +1430,15 @@ export default {
   width: 200rpx;
   height: 80rpx;
   line-height: 80rpx;
-  background-color: #007aff;
-  color: #fff;
+  background-color: $uni-color-primary;
+  color: $uni-text-color-inverse;
   border-radius: 40rpx;
   font-size: 28rpx;
 }
 
 .safe-area-bottom {
   height: 20rpx;
-  background-color: #fff;
+  background-color: $uni-bg-color;
   position: fixed;
   bottom: 0;
   left: 0;

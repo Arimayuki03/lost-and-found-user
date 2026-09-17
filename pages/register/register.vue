@@ -1,15 +1,10 @@
 <template>
-  <view class="register-container">
-    <!-- 顶部导航栏 -->
-    <view class="top-bg" :style="{ paddingTop: statusBarHeight + 60 + 'rpx' }">
-      <view class="back-btn" :style="{ top: statusBarHeight + 20 + 'rpx' }" @tap="goBack">
-        <text class="back-text">&lt;</text>
-      </view>
-      <text class="title">注册账号</text>
-    </view>
-    
-    <!-- 滚动容器 -->
+  <view class="register-container lf-auth-page">
+    <!-- 滚动容器（hero 须在 scroll-view 内：表单卡片 -60rpx 上叠，放外面会被滚动视口裁掉卡片顶部） -->
     <scroll-view scroll-y class="scroll-container">
+      <!-- 顶部导航栏（三页共用组件，补 logo） -->
+      <lf-auth-header title="注册账号" />
+
       <!-- 注册表单 -->
       <view class="form-container">
         <!-- 头像上传区域 -->
@@ -78,35 +73,47 @@
           </view>
         </view>
         
-        <!-- 密码输入区域 -->
+        <!-- 密码输入区域（眼睛图标切换明文/密文） -->
         <view class="form-item">
           <text class="label">密码</text>
-          <input 
-            :type="showPassword ? 'text' : 'password'"
-            class="input" 
-            v-model="form.password" 
-            placeholder="请设置密码(最少6位)"
-          />
-          <text class="password-toggle" @tap="togglePasswordVisibility">
-            {{ showPassword ? '隐藏' : '显示' }}
-          </text>
+          <view class="password-wrap">
+            <input 
+              class="input password-input" 
+              :password="!showPassword"
+              v-model="form.password" 
+              placeholder="请设置密码(最少8位)"
+            />
+            <uni-icons 
+              class="password-toggle" 
+              :type="showPassword ? 'eye-slash' : 'eye'" 
+              :size="22" 
+              :color="colorGrey" 
+              @click="togglePasswordVisibility" 
+            />
+          </view>
         </view>
         
         <view class="form-item">
           <text class="label">确认密码</text>
-          <input 
-            :type="showConfirmPassword ? 'text' : 'password'"
-            class="input" 
-            v-model="form.confirmPassword" 
-            placeholder="请再次输入密码"
-          />
-          <text class="password-toggle" @tap="toggleConfirmPasswordVisibility">
-            {{ showConfirmPassword ? '隐藏' : '显示' }}
-          </text>
+          <view class="password-wrap">
+            <input 
+              class="input password-input" 
+              :password="!showConfirmPassword"
+              v-model="form.confirmPassword" 
+              placeholder="请再次输入密码"
+            />
+            <uni-icons 
+              class="password-toggle" 
+              :type="showConfirmPassword ? 'eye-slash' : 'eye'" 
+              :size="22" 
+              :color="colorGrey" 
+              @click="toggleConfirmPasswordVisibility" 
+            />
+          </view>
         </view>
         
         <!-- 提交按钮 -->
-        <button class="register-btn" @tap="handleRegister">注册</button>
+        <button class="submit-btn" @tap="handleRegister">注册</button>
         
         <!-- 其他操作 -->
         <view class="actions">
@@ -126,9 +133,12 @@
 import { mapActions } from 'vuex';
 import { BASE_URL } from '@/config';
 
+import { COLOR_GREY, COLOR_SECONDARY } from '@/config/ui';
 export default {
   data() {
     return {
+      colorGrey: COLOR_GREY, // 辅助图标灰（与 $uni-text-color-grey 同步）
+      colorSecondary: COLOR_SECONDARY, // 更弱一级灰（箭头/占位图标）
       // 表单数据
       form: {
         name: '',
@@ -145,7 +155,6 @@ export default {
       codeBtnText: '获取验证码',
       codeBtnDisabled: false,
       countdown: 60,
-      statusBarHeight: 20,
       // 查重/验证码状态提示
       studentIdStatus: '',
       studentIdTip: '',
@@ -154,12 +163,6 @@ export default {
       verificationStatus: '',
       verificationTip: ''
     };
-  },
-
-  onLoad() {
-    // 获取系统状态栏高度，用于适配不同设备
-    const systemInfo = uni.getSystemInfoSync();
-    this.statusBarHeight = systemInfo.statusBarHeight || 20;
   },
 
   onUnload() {
@@ -173,12 +176,7 @@ export default {
   methods: {
     // 从Vuex映射注册动作
     ...mapActions(['register']),
-    
-    // 返回上一页
-    goBack() {
-      uni.navigateBack();
-    },
-    
+
     /**
      * 检查学号是否已被注册
      * 仅在学号符合12位数字格式时进行检查
@@ -246,14 +244,11 @@ export default {
             mask: true
           });
           
-          // 先上传图片
+          // 先上传图片（注册前无登录态，走专用匿名头像上传接口，后端按 IP 限流）
           uni.uploadFile({
-            url: `${BASE_URL}/common/images/upload`,
+            url: `${BASE_URL}/common/images/upload-avatar`,
             filePath: tempFilePath,
             name: 'file',
-            header: {
-              'Authorization': 'Bearer ' + uni.getStorageSync('token')
-            },
             success: async (uploadRes) => {
               try {
                 const data = JSON.parse(uploadRes.data);
@@ -263,6 +258,7 @@ export default {
                 }
                 
                 // 进行不良行为识别
+                uni.hideLoading(); // 与上方"上传中"配对，避免 showLoading 嵌套告警
                 uni.showLoading({
                   title: '正在识别...',
                   mask: true
@@ -499,8 +495,8 @@ export default {
         return false;
       }
       
-      if (this.form.password.length < 6) {
-        uni.showToast({ title: '密码长度至少为6位', icon: 'none' });
+      if (this.form.password.length < 8) {
+        uni.showToast({ title: '密码长度至少8位', icon: 'none' });
         return false;
       }
       
@@ -528,11 +524,11 @@ export default {
 };
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 .register-container {
   min-height: 100vh;
   height: 100vh;
-  background-color: #f8f8f8;
+  background-color: $uni-bg-color-grey;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -540,77 +536,11 @@ export default {
 
 .scroll-container {
   flex: 1;
+  min-height: 0; /* 允许 flex 子项收缩到剩余高度，滚动收在 scroll-view 内部，否则会撑破 100vh 容器露出底色 */
   padding: 0 0 40rpx;
 }
 
-.top-bg {
-  height: auto;
-  min-height: 200rpx;
-  padding-bottom: 30rpx;
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-bottom-left-radius: 40rpx;
-  border-bottom-right-radius: 40rpx;
-  position: relative;
-  margin-bottom: 40rpx;
-}
-
-.back-btn {
-  position: absolute;
-  left: 30rpx;
-  width: 60rpx;
-  height: 60rpx;
-  background-color: rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-
-.back-text {
-  font-size: 40rpx;
-  color: #fff;
-  font-weight: bold;
-  line-height: 1;
-}
-
-.title {
-  font-size: 36rpx;
-  color: #fff;
-  font-weight: bold;
-}
-
-.form-container {
-  margin: 0 40rpx;
-  padding: 40rpx 40rpx 30rpx;
-  background-color: #fff;
-  border-radius: 20rpx;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
-  z-index: 1;
-}
-
-.form-item {
-  margin-bottom: 25rpx;
-  position: relative;
-}
-
-.label {
-  font-size: 28rpx;
-  color: #333;
-  margin-bottom: 8rpx;
-  display: block;
-}
-
-.input {
-  height: 80rpx;
-  border-bottom: 1px solid #e5e5e5;
-  font-size: 30rpx;
-  color: #333;
-}
+/* 表单容器/表单项/标签/输入框见 styles/common.scss（.lf-auth-page） */
 
 .code-wrapper {
   display: flex;
@@ -623,41 +553,67 @@ export default {
 
 .code-btn {
   width: 200rpx;
-  height: 60rpx;
-  background-color: #007AFF;
-  color: #fff;
-  font-size: 24rpx;
-  border-radius: 30rpx;
+  height: 88rpx;
+  background-color: $uni-color-primary;
+  color: $uni-text-color-inverse;
+  font-size: $uni-font-size-caption;
+  border-radius: $uni-radius-md;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-left: 20rpx;
   padding: 0;
+  border: none;
+  flex-shrink: 0;
+
+  &::after {
+    border: none;
+  }
 }
 
 .code-btn[disabled] {
-  background-color: #ccc;
-  color: #fff;
+  background-color: $uni-bg-color-section;
+  color: $uni-text-color-grey;
+}
+
+/* 密码眼睛图标 */
+.password-wrap {
+  position: relative;
+}
+
+.password-input {
+  padding-right: 80rpx;
 }
 
 .password-toggle {
   position: absolute;
-  right: 0;
-  bottom: 30rpx;
-  font-size: 28rpx;
-  color: #007AFF;
+  right: 24rpx;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
-.register-btn {
-  height: 90rpx;
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  color: #fff;
-  border-radius: 45rpx;
-  font-size: 32rpx;
+.submit-btn {
+  height: 92rpx;
+  background-color: $uni-color-primary;
+  color: $uni-text-color-inverse;
+  border-radius: $uni-border-radius-btn;
+  font-size: $uni-font-size-lg;
+  font-weight: 500;
   margin-top: 40rpx;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: $uni-shadow-btn;
+  border: none;
+
+  &::after {
+    border: none;
+  }
+
+  &:active {
+    background-color: $uni-color-primary-deep;
+    transform: scale(0.99);
+  }
 }
 
 .actions {
@@ -668,7 +624,7 @@ export default {
 
 .action-text {
   font-size: 28rpx;
-  color: #007AFF;
+  color: $uni-color-primary;
 }
 
 .footer {
@@ -679,14 +635,14 @@ export default {
 
 .footer-text {
   font-size: 24rpx;
-  color: #999;
+  color: $uni-text-color-grey;
 }
 
 .avatar-upload {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 30rpx;
+  margin-bottom: 36rpx;
 }
 
 .avatar-preview {
@@ -694,19 +650,25 @@ export default {
   height: 150rpx;
   border-radius: 50%;
   margin-bottom: 20rpx;
-  border: 2px solid #e5e5e5;
-  background-color: #f8f8f8;
+  border: 4rpx solid $uni-bg-color;
+  background-color: $uni-bg-color-section;
+  box-shadow: 0 4rpx 16rpx rgba(31, 41, 55, 0.12);
 }
 
 .upload-btn {
-  width: 200rpx;
-  height: 60rpx;
-  background-color: #007AFF;
-  color: #fff;
-  font-size: 24rpx;
-  border-radius: 30rpx;
+  width: 220rpx;
+  height: 64rpx;
+  background-color: $uni-color-primary-soft;
+  color: $uni-color-primary;
+  font-size: $uni-font-size-caption;
+  border-radius: 32rpx;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: none;
+
+  &::after {
+    border: none;
+  }
 }
 </style> 

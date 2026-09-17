@@ -1,14 +1,7 @@
 <template>
-  <view class="reset-container">
-    <!-- 顶部背景与标题 -->
-    <view class="top-bg" :style="{ paddingTop: statusBarHeight + 60 + 'rpx' }">
-      <!-- 返回按钮 -->
-      <view class="back-btn" :style="{ top: statusBarHeight + 20 + 'rpx' }" @tap="goBack">
-        <text class="back-text">&lt;</text>
-      </view>
-      <image class="logo" src="/static/logo.png" mode="aspectFit"></image>
-      <text class="title">重置密码</text>
-    </view>
+  <view class="reset-container lf-auth-page">
+    <!-- 顶部背景与标题（三页共用组件） -->
+    <lf-auth-header title="重置密码" />
     
     <!-- 重置密码表单 -->
     <view class="form-container">
@@ -44,36 +37,48 @@
         </view>
       </view>
       
-      <!-- 新密码输入 -->
+      <!-- 新密码输入（眼睛图标切换明文/密文） -->
       <view class="form-item">
         <text class="label">新密码</text>
-        <input 
-          :type="showPassword ? 'text' : 'password'" 
-          class="input" 
-          v-model="form.new_password" 
-          placeholder="请输入新密码"
-        />
-        <text class="password-toggle" @tap="togglePasswordVisibility">
-          {{ showPassword ? '隐藏' : '显示' }}
-        </text>
+        <view class="password-wrap">
+          <input 
+            class="input password-input" 
+            :password="!showPassword" 
+            v-model="form.new_password" 
+            placeholder="请输入新密码"
+          />
+          <uni-icons 
+            class="password-toggle" 
+            :type="showPassword ? 'eye-slash' : 'eye'" 
+            :size="22" 
+            :color="colorGrey" 
+            @click="togglePasswordVisibility" 
+          />
+        </view>
       </view>
       
       <!-- 确认密码输入 -->
       <view class="form-item">
         <text class="label">确认密码</text>
-        <input 
-          :type="showConfirmPassword ? 'text' : 'password'"
-          class="input" 
-          v-model="form.confirm_password" 
-          placeholder="请再次输入新密码"
-        />
-        <text class="password-toggle" @tap="toggleConfirmPasswordVisibility">
-          {{ showConfirmPassword ? '隐藏' : '显示' }}
-        </text>
+        <view class="password-wrap">
+          <input 
+            class="input password-input" 
+            :password="!showConfirmPassword"
+            v-model="form.confirm_password" 
+            placeholder="请再次输入新密码"
+          />
+          <uni-icons 
+            class="password-toggle" 
+            :type="showConfirmPassword ? 'eye-slash' : 'eye'" 
+            :size="22" 
+            :color="colorGrey" 
+            @click="toggleConfirmPasswordVisibility" 
+          />
+        </view>
       </view>
       
       <!-- 提交按钮 -->
-      <button class="reset-btn" @tap="handleResetPassword">重置密码</button>
+      <button class="submit-btn" @tap="handleResetPassword">重置密码</button>
       
       <!-- 返回登录按钮 -->
       <view class="actions">
@@ -91,12 +96,15 @@
 <script>
 import { mapActions } from 'vuex';
 
+import { COLOR_GREY, COLOR_SECONDARY } from '@/config/ui';
 export default {
   /**
    * 组件数据
    */
   data() {
     return {
+      colorGrey: COLOR_GREY, // 辅助图标灰（与 $uni-text-color-grey 同步）
+      colorSecondary: COLOR_SECONDARY, // 更弱一级灰（箭头/占位图标）
       // 表单数据
       form: {
         email: '',
@@ -107,35 +115,17 @@ export default {
       // 密码显示控制
       showPassword: false,
       showConfirmPassword: false,
-      // 状态栏高度
-      statusBarHeight: 20,
       // 验证码按钮状态
       codeBtnText: '获取验证码',
       codeBtnDisabled: false,
       countdown: 60
     };
   },
-  
-  /**
-   * 生命周期钩子 - 页面加载
-   */
-  onLoad() {
-    // 获取系统状态栏高度以适配不同设备
-    const systemInfo = uni.getSystemInfoSync();
-    this.statusBarHeight = systemInfo.statusBarHeight || 20;
-  },
-  
+
   methods: {
     // 映射Vuex Actions
     ...mapActions(['resetPassword']),
-    
-    /**
-     * 返回上一页
-     */
-    goBack() {
-      uni.navigateBack();
-    },
-    
+
     /**
      * 切换密码显示/隐藏状态
      */
@@ -180,6 +170,8 @@ export default {
       } catch (error) {
         this.emailTip = '验证失败，请重试';
         this.emailStatus = 'error';
+        // 查重接口失败时中断发码流程，避免把验证码发给一个不可用的邮箱
+        return;
       }
       
       // 启动倒计时
@@ -244,9 +236,9 @@ export default {
       const emptyFields = this.validateFormFields();
       if (emptyFields) return;
 
-      // 密码长度验证（与注册页保持一致的 6 位下限）
-      if (this.form.new_password.length < 6) {
-        uni.showToast({ title: '密码长度至少为6位', icon: 'none' });
+      // 密码长度验证（与注册页/后端保持一致的 8 位下限，后端要求 8-64 位）
+      if (this.form.new_password.length < 8) {
+        uni.showToast({ title: '密码长度至少8位', icon: 'none' });
         return;
       }
 
@@ -339,97 +331,32 @@ export default {
 };
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 .reset-container {
   min-height: 100vh;
-  background-color: #f8f8f8;
+  background-color: $uni-bg-color-grey;
   display: flex;
   flex-direction: column;
   padding-bottom: 40rpx;
   box-sizing: border-box;
 }
 
-.top-bg {
-  height: auto;
-  min-height: 200rpx;
-  padding-bottom: 30rpx;
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-bottom-left-radius: 40rpx;
-  border-bottom-right-radius: 40rpx;
-  position: relative;
-  margin-bottom: 40rpx;
-}
+/* 表单容器/表单项/标签/输入框见 styles/common.scss（.lf-auth-page） */
 
-.back-btn {
-  position: absolute;
-  left: 30rpx;
-  width: 60rpx;
-  height: 60rpx;
-  background-color: rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-
-.back-text {
-  font-size: 40rpx;
-  color: #fff;
-  font-weight: bold;
-  line-height: 1;
-}
-
-.logo {
-  width: 100rpx;
-  height: 100rpx;
-  margin-bottom: 15rpx;
-}
-
-.title {
-  font-size: 36rpx;
-  color: #fff;
-  font-weight: bold;
-}
-
-.form-container {
-  margin: 0 40rpx;
-  padding: 40rpx;
-  background-color: #fff;
-  border-radius: 20rpx;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
-  z-index: 1;
-}
-
-.form-item {
-  margin-bottom: 30rpx;
+/* 密码眼睛图标 */
+.password-wrap {
   position: relative;
 }
 
-.label {
-  font-size: 28rpx;
-  color: #333;
-  margin-bottom: 10rpx;
-  display: block;
-}
-
-.input {
-  height: 90rpx;
-  border-bottom: 1px solid #e5e5e5;
-  font-size: 30rpx;
-  color: #333;
+.password-input {
+  padding-right: 80rpx;
 }
 
 .password-toggle {
   position: absolute;
-  right: 0;
-  bottom: 30rpx;
-  font-size: 28rpx;
-  color: #007AFF;
+  right: 24rpx;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .code-wrapper {
@@ -443,33 +370,51 @@ export default {
 
 .code-btn {
   width: 200rpx;
-  height: 60rpx;
-  background-color: #007AFF;
-  color: #fff;
-  font-size: 24rpx;
-  border-radius: 30rpx;
+  height: 88rpx;
+  background-color: $uni-color-primary;
+  color: $uni-text-color-inverse;
+  font-size: $uni-font-size-caption;
+  border-radius: $uni-radius-md;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-left: 20rpx;
   padding: 0;
+  border: none;
+  flex-shrink: 0;
+
+  &::after {
+    border: none;
+  }
 }
 
 .code-btn[disabled] {
-  background-color: #ccc;
-  color: #fff;
+  background-color: $uni-bg-color-section;
+  color: $uni-text-color-grey;
 }
 
-.reset-btn {
-  height: 90rpx;
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  color: #fff;
-  border-radius: 45rpx;
-  font-size: 32rpx;
+.submit-btn {
+  height: 92rpx;
+  background-color: $uni-color-primary;
+  color: $uni-text-color-inverse;
+  border-radius: $uni-border-radius-btn;
+  font-size: $uni-font-size-lg;
+  font-weight: 500;
   margin-top: 60rpx;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: $uni-shadow-btn;
+  border: none;
+
+  &::after {
+    border: none;
+  }
+
+  &:active {
+    background-color: $uni-color-primary-deep;
+    transform: scale(0.99);
+  }
 }
 
 .actions {
@@ -479,8 +424,8 @@ export default {
 }
 
 .action-text {
-  font-size: 28rpx;
-  color: #007AFF;
+  font-size: $uni-font-size-base;
+  color: $uni-color-primary;
 }
 
 .footer {
@@ -490,7 +435,7 @@ export default {
 }
 
 .footer-text {
-  font-size: 24rpx;
-  color: #999;
+  font-size: $uni-font-size-caption;
+  color: $uni-text-color-grey;
 }
 </style> 

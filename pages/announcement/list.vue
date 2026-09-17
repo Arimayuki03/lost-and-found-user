@@ -23,10 +23,7 @@
 		</view>
 		
 		<!-- 空状态 -->
-		<view class="empty-state" v-if="!isLoading && announcements.length === 0">
-			<image class="empty-image" src="/static/logo.png" mode="aspectFit"></image>
-			<text class="empty-text">暂无公告</text>
-		</view>
+		<lf-empty v-if="!isLoading && announcements.length === 0" type="announcement" text="暂无公告" />
 	</view>
 </template>
 
@@ -140,21 +137,26 @@ export default {
 };
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 /* 公告列表容器 */
 .announcement-list {
-	padding: 20rpx;
-	background-color: #f8f8f8;
+	padding: 24rpx;
+	background-color: $uni-bg-color-grey;
 	min-height: 100vh;
 }
 
 /* 公告列表项 */
 .announcement-item {
-	background-color: #fff;
-	border-radius: 20rpx;
+	background-color: $uni-bg-color;
+	border-radius: $uni-border-radius-card;
 	padding: 30rpx;
 	margin-bottom: 20rpx;
-	box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+	box-shadow: $uni-shadow-card;
+	transition: transform 0.15s;
+
+	&:active {
+		transform: scale(0.99);
+	}
 }
 
 /* 公告内容区域 */
@@ -164,16 +166,18 @@ export default {
 
 /* 公告标题 */
 .announcement-title {
-	font-size: 32rpx;
-	font-weight: bold;
-	color: #333;
-	margin-bottom: 10rpx;
+	font-size: $uni-font-size-lg;
+	font-weight: 600;
+	color: $uni-text-color;
+	margin-bottom: 12rpx;
+	line-height: 1.4;
 }
 
 /* 公告描述（内容预览） */
 .announcement-desc {
-	font-size: 26rpx;
-	color: #666;
+	font-size: $uni-font-size-sm;
+	color: $uni-text-color-grey;
+	line-height: 1.6;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	display: -webkit-box;
@@ -184,8 +188,8 @@ export default {
 
 /* 公告时间和标签区域 */
 .announcement-time {
-	font-size: 24rpx;
-	color: #999;
+	font-size: $uni-font-size-caption;
+	color: $uni-text-color-grey;
 	text-align: right;
 	display: flex;
 	justify-content: flex-end;
@@ -194,12 +198,13 @@ export default {
 
 /* 已更新标签 */
 .updated-tag {
-	margin-left: 10rpx;
-	background-color: #FF9500;
-	color: #fff;
-	padding: 2rpx 8rpx;
-	border-radius: 8rpx;
-	font-size: 20rpx;
+	margin-left: 12rpx;
+	background-color: $uni-color-warning-soft;
+	color: $uni-color-warning;
+	padding: 4rpx 12rpx;
+	border-radius: $uni-radius-xs;
+	font-size: $uni-font-size-caption;
+	font-weight: 500;
 }
 
 /* 加载更多区域 */
@@ -211,28 +216,12 @@ export default {
 /* 加载文本 */
 .loading-text {
 	font-size: 24rpx;
-	color: #999;
+	color: $uni-text-color-grey;
 }
 
 /* 空状态容器 */
-.empty-state {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	padding: 100rpx 0;
-}
 
 /* 空状态图片 */
-.empty-image {
-	width: 200rpx;
-	height: 200rpx;
-	margin-bottom: 20rpx;
-}
 
 /* 空状态文本 */
-.empty-text {
-	font-size: 28rpx;
-	color: #999;
-}
 </style> 

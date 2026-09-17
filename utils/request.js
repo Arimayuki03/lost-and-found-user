@@ -1,5 +1,5 @@
 import store from '../store';
-import socketIOService from './socketio';
+import { forceLogout } from './auth';
 import { BASE_URL } from '@/config';
 
 // 令牌过期前的刷新阈值(秒)
@@ -182,35 +182,11 @@ function objectToQueryString(obj) {
 }
 
 /**
- * 处理未授权错误，清除令牌并跳转到登录页
+ * 处理未授权错误：统一走 utils/auth.js 的 forceLogout
+ * （清凭证 + 关 Socket.IO 长连接 + 重置 Vuex 登录态 + 跳转登录页）
  */
 function handleUnauthorized() {
-  uni.removeStorageSync('token');
-  uni.removeStorageSync('refreshToken');
-  uni.removeStorageSync('userInfo');
-
-  // 关闭携带旧令牌的 Socket.IO 长连接，避免退出后仍接收消息
-  try {
-    socketIOService.close();
-  } catch (e) {
-    // socket 服务未初始化时忽略
-  }
-
-  uni.showToast({
-    title: '登录已过期，请重新登录',
-    icon: 'none'
-  });
-
-  setTimeout(() => {
-    // reLaunch 避免在已有页面上反复叠加登录页
-    const pages = getCurrentPages();
-    const current = pages[pages.length - 1];
-    if (!current || current.route !== 'pages/login/login') {
-      uni.reLaunch({
-        url: '/pages/login/login'
-      });
-    }
-  }, 1500);
+  forceLogout();
 }
 
 /**
@@ -265,6 +241,10 @@ const request = async (options, _retryCount = 0) => {
 
   // 添加基础URL
   if (!url.startsWith('http')) {
+    // 防御：BASE_URL 为空（如生产未配置地址）时请求会打到同源相对路径，直接显式失败
+    if (!BASE_URL) {
+      return Promise.reject(new Error('后端地址未配置'));
+    }
     url = BASE_URL + url;
   }
 
@@ -353,8 +333,93 @@ uni.onAppShow(() => {
   setupAutoRefreshToken();
 });
 
+/**
+ * 统一文件上传方法（uni.uploadFile 封装）
+ * 与 request 相同的令牌处理：过期先刷新、401 后刷新重试一次
+ * @param {Object} options 上传配置
+ * @param {string} options.url 请求路径
+ * @param {string} options.filePath 本地文件路径
+ * @param {string} [options.name='file'] 文件字段名
+ * @param {Object} [options.formData] 附加表单数据
+ * @param {number} [_retryCount=0] 401 重试次数（内部参数，最多重试1次）
+ * @returns {Promise} 上传结果Promise（resolve 解析后的 JSON 响应）
+ */
+const uploadFile = async (options, _retryCount = 0) => {
+  // 令牌过期/将过期时先刷新（与 request 保持一致）
+  if (!options.url.includes('/user/login') && (isTokenExpired() || isTokenExpiringSoon())) {
+    try {
+      await refreshTokenSingleton();
+      setupAutoRefreshToken();
+    } catch (error) {
+      if (isTokenExpired()) {
+        handleUnauthorized();
+        return Promise.reject({ message: '登录已过期' });
+      }
+    }
+  }
+
+  const token = uni.getStorageSync('token');
+  let url = options.url;
+  if (!url.startsWith('http')) {
+    // 防御：BASE_URL 为空（如生产未配置地址）时上传会打到同源相对路径，直接显式失败
+    if (!BASE_URL) {
+      return Promise.reject(new Error('后端地址未配置'));
+    }
+    url = BASE_URL + url;
+  }
+
+  return new Promise((resolve, reject) => {
+    uni.uploadFile({
+      ...options,
+      url: url,
+      name: options.name || 'file',
+      header: {
+        ...(options.header || {}),
+        'Authorization': 'Bearer ' + token
+      },
+      success: (res) => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          // uploadFile 返回字符串，需解析为 JSON
+          let data = res.data;
+          try {
+            data = JSON.parse(res.data);
+          } catch (e) { /* 非 JSON 响应原样返回 */ }
+          resolve(data);
+        } else if (res.statusCode === 401 && !options.url.includes('/user/login') && _retryCount < 1) {
+          // 令牌在请求途中过期：刷新后重试一次
+          refreshTokenSingleton().then(() => {
+            setupAutoRefreshToken();
+            uploadFile(options, _retryCount + 1).then(resolve).catch(reject);
+          }).catch(() => {
+            handleUnauthorized();
+            reject({ message: '登录已过期' });
+          });
+        } else {
+          let data = res.data;
+          try {
+            data = JSON.parse(res.data);
+          } catch (e) { /* 保持原始字符串 */ }
+          uni.showToast({
+            title: (data && data.error) || '请求失败',
+            icon: 'none'
+          });
+          reject(data);
+        }
+      },
+      fail: (err) => {
+        uni.showToast({
+          title: '网络连接失败，请检查网络设置',
+          icon: 'none'
+        });
+        reject(err);
+      }
+    });
+  });
+};
+
 // 导出request和setupAutoRefreshToken函数
 const requestModule = request;
 requestModule.setupAutoRefreshToken = setupAutoRefreshToken;
+requestModule.uploadFile = uploadFile;
 
-export default requestModule; 
+export default requestModule;

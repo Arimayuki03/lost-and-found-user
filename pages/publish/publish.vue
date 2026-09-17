@@ -1,5 +1,5 @@
 <template>
-  <view class="publish-container">
+  <view class="publish-container lf-login-guide">
     <!-- 未登录状态显示 -->
     <view v-if="!isLoggedIn" class="login-section">
       <image class="login-image" src="/static/logo.png" mode="aspectFit"></image>
@@ -12,27 +12,17 @@
     
     <!-- 已登录内容 -->
     <block v-else>
-      <!-- 切换标签：失物/招领 -->
+      <!-- 切换标签：失物/招领（分段控件，图标区分语义） -->
       <view class="tabs">
-        <view 
-          class="tab-item" 
-          :class="{ active: activeTab === 'lost' }"
-          @tap="switchTab('lost')"
-        >
-          <view class="tab-icon">
-            <uni-icons type="paperplane" size="20"></uni-icons>
+        <view class="lf-segment publish-segment">
+          <view class="lf-segment-item" :class="{ active: activeTab === 'lost' }" @tap="switchTab('lost')">
+            <uni-icons type="search" size="16" :color="activeTab === 'lost' ? colorPrimary : colorGrey" style="margin-right: 8rpx" />
+            <text>发布失物</text>
           </view>
-          <text class="tab-text">发布失物信息</text>
-        </view>
-        <view 
-          class="tab-item" 
-          :class="{ active: activeTab === 'found' }"
-          @tap="switchTab('found')"
-        >
-          <view class="tab-icon">
-            <uni-icons type="paperplane-filled" size="20"></uni-icons>
+          <view class="lf-segment-item" :class="{ active: activeTab === 'found' }" @tap="switchTab('found')">
+            <uni-icons type="gift" size="16" :color="activeTab === 'found' ? colorPrimary : colorGrey" style="margin-right: 8rpx" />
+            <text>发布招领</text>
           </view>
-          <text class="tab-text">发布招领信息</text>
         </view>
       </view>
       
@@ -46,11 +36,11 @@
               <view class="upload-container">
                 <view class="upload-preview" v-if="lostForm.image_url">
                   <image class="preview-image" :src="lostForm.image_url" mode="aspectFill"></image>
-                  <text class="delete-icon" @tap="deleteLostImage">×</text>
+                  <view class="delete-icon" @tap="deleteLostImage"><uni-icons type="closeempty" size="18" :color="colorWhite"></uni-icons></view>
                 </view>
                 <view class="upload-btn" @tap="chooseImage('lost')" v-else>
-                  <text class="upload-icon">+</text>
-                  <text class="upload-text">上传图片</text>
+                  <uni-icons class="upload-icon" type="camera-filled" size="30" :color="colorSecondary"></uni-icons>
+                  <text class="upload-text">点击上传照片</text>
                 </view>
                 <text class="upload-tip">请上传清晰的物品照片，有助于物品的辨认</text>
               </view>
@@ -63,19 +53,19 @@
                 type="text" 
                 v-model="lostForm.name" 
                 placeholder="请输入物品名称" 
-                maxlength="50"
+                maxlength="100"
               />
             </view>
             
             <view class="form-item">
               <text class="form-label required">物品类别</text>
-              <input 
-                class="form-input" 
-                type="text" 
-                v-model="lostForm.category" 
-                placeholder="请输入物品类别" 
-                maxlength="20"
-              />
+              <!-- 类别改为选择器（与首页分类导航同源），降低输入成本、避免拼错 -->
+              <picker mode="selector" :range="categories" :value="lostCategoryIndex" @change="onLostCategoryChange">
+                <view class="form-input picker-input">
+                  <text :class="lostForm.category ? 'picker-value' : 'picker-placeholder'">{{ lostForm.category || '请选择物品类别' }}</text>
+                  <uni-icons type="bottom" size="16" :color="colorGrey"></uni-icons>
+                </view>
+              </picker>
             </view>
             
             <view class="form-item">
@@ -99,7 +89,7 @@
                 type="text" 
                 v-model="lostForm.location" 
                 placeholder="请输入遗失地点" 
-                maxlength="100"
+                maxlength="200"
               />
             </view>
             
@@ -110,7 +100,7 @@
                 type="text" 
                 v-model="lostForm.contact" 
                 placeholder="请输入联系方式" 
-                maxlength="30"
+                maxlength="50"
               />
             </view>
             
@@ -120,15 +110,15 @@
                 class="form-textarea" 
                 v-model="lostForm.description" 
                 placeholder="请详细描述物品特征、遗失经过等信息" 
-                maxlength="300"
+                maxlength="5000"
               />
-              <text class="textarea-counter">{{ lostForm.description.length }}/300</text>
+              <text class="textarea-counter">{{ lostForm.description.length }}/5000</text>
             </view>
           </view>
           
           <button class="submit-btn" @tap="submitLostForm">
             <view class="submit-icon">
-              <uni-icons type="paperplane-filled" size="18" color="#fff"></uni-icons>
+              <uni-icons type="paperplane-filled" size="18" :color="colorWhite"></uni-icons>
             </view>
             <text class="submit-text">发布失物信息</text>
           </button>
@@ -149,11 +139,11 @@
               <view class="upload-container">
                 <view class="upload-preview" v-if="foundForm.image_url">
                   <image class="preview-image" :src="foundForm.image_url" mode="aspectFill"></image>
-                  <text class="delete-icon" @tap="deleteFoundImage">×</text>
+                  <view class="delete-icon" @tap="deleteFoundImage"><uni-icons type="closeempty" size="18" :color="colorWhite"></uni-icons></view>
                 </view>
                 <view class="upload-btn" @tap="chooseImage('found')" v-else>
-                  <text class="upload-icon">+</text>
-                  <text class="upload-text">上传图片</text>
+                  <uni-icons class="upload-icon" type="camera-filled" size="30" :color="colorSecondary"></uni-icons>
+                  <text class="upload-text">点击上传照片</text>
                 </view>
                 <text class="upload-tip">请上传清晰的物品照片，有助于物品的辨认</text>
               </view>
@@ -166,19 +156,18 @@
                 type="text" 
                 v-model="foundForm.name" 
                 placeholder="请输入物品名称" 
-                maxlength="50"
+                maxlength="100"
               />
             </view>
             
             <view class="form-item">
               <text class="form-label required">物品类别</text>
-              <input 
-                class="form-input" 
-                type="text" 
-                v-model="foundForm.category" 
-                placeholder="请输入物品类别" 
-                maxlength="20"
-              />
+              <picker mode="selector" :range="categories" :value="foundCategoryIndex" @change="onFoundCategoryChange">
+                <view class="form-input picker-input">
+                  <text :class="foundForm.category ? 'picker-value' : 'picker-placeholder'">{{ foundForm.category || '请选择物品类别' }}</text>
+                  <uni-icons type="bottom" size="16" :color="colorGrey"></uni-icons>
+                </view>
+              </picker>
             </view>
             
             <view class="form-item">
@@ -202,7 +191,7 @@
                 type="text" 
                 v-model="foundForm.location" 
                 placeholder="请输入拾获地点" 
-                maxlength="100"
+                maxlength="200"
               />
             </view>
             
@@ -213,7 +202,7 @@
                 type="text" 
                 v-model="foundForm.contact" 
                 placeholder="请输入联系方式" 
-                maxlength="30"
+                maxlength="50"
               />
             </view>
             
@@ -223,15 +212,15 @@
                 class="form-textarea" 
                 v-model="foundForm.description" 
                 placeholder="请详细描述物品特征、拾获经过等信息" 
-                maxlength="300"
+                maxlength="5000"
               />
-              <text class="textarea-counter">{{ foundForm.description.length }}/300</text>
+              <text class="textarea-counter">{{ foundForm.description.length }}/5000</text>
             </view>
           </view>
           
           <button class="submit-btn" @tap="submitFoundForm">
             <view class="submit-icon">
-              <uni-icons type="paperplane-filled" size="18" color="#fff"></uni-icons>
+              <uni-icons type="paperplane-filled" size="18" :color="colorWhite"></uni-icons>
             </view>
             <text class="submit-text">发布招领信息</text>
           </button>
@@ -251,12 +240,21 @@
 <script>
 import { checkLogin, goToLogin } from '../../utils/common';
 import { BASE_URL } from '@/config';
+import request from '@/utils/request';
 
+import { COLOR_GREY, COLOR_PRIMARY, COLOR_SECONDARY, COLOR_WHITE } from '@/config/ui';
 export default {
   data() {
     return {
+      colorWhite: COLOR_WHITE, // 前景白（与主色实底按钮上的图标同色）
+      colorPrimary: COLOR_PRIMARY, // 主色（分段控件激活图标）
+      colorGrey: COLOR_GREY, // 辅助图标灰（与 $uni-text-color-grey 同步）
+      colorSecondary: COLOR_SECONDARY, // 更弱一级灰（箭头/占位图标）
       isLoggedIn: false,
       submitting: false, // 是否正在提交（防重复提交）
+      uploading: false, // 是否正在上传图片（防重复上传）
+      // 物品类别枚举（与首页分类导航/管理端筛选同源）
+      categories: ['电子产品', '证件', '钱包', '钥匙', '书籍', '衣物', '饰品', '其他'],
       activeTab: 'lost', // 当前激活的标签：lost-失物，found-招领
       lostForm: {
         name: '',
@@ -289,7 +287,25 @@ export default {
     this.checkLoginStatus();
   },
 
+  computed: {
+    // picker 当前选中索引（AI 回填的类别不在枚举中时为 -1，picker 显示仍走 category 文本）
+    lostCategoryIndex() {
+      return this.categories.indexOf(this.lostForm.category);
+    },
+    foundCategoryIndex() {
+      return this.categories.indexOf(this.foundForm.category);
+    }
+  },
+
   methods: {
+    // 类别选择（失物/招领表单共用枚举）
+    onLostCategoryChange(e) {
+      this.lostForm.category = this.categories[e.detail.value];
+    },
+    onFoundCategoryChange(e) {
+      this.foundForm.category = this.categories[e.detail.value];
+    },
+
     // 检查登录状态
     checkLoginStatus() {
       this.isLoggedIn = checkLogin();
@@ -316,123 +332,87 @@ export default {
     
     // 选择图片
     chooseImage(type) {
+      // 并发保护：上一次上传尚未完成时拒绝再次进入
+      if (this.uploading) {
+        uni.showToast({ title: '正在上传中，请稍候', icon: 'none' });
+        return;
+      }
       uni.chooseImage({
         count: 1,
         sizeType: ['compressed'],
         sourceType: ['album', 'camera'],
         success: (res) => {
           const tempFilePath = res.tempFilePaths[0];
-          
+
+          // 客户端大小预检：超过 8MB 直接拒绝（部分端 tempFiles 元素无 size 字段，跳过检查）
+          const tempFile = res.tempFiles && res.tempFiles[0];
+          if (tempFile && typeof tempFile.size === 'number' && tempFile.size > 8 * 1024 * 1024) {
+            uni.showToast({ title: '图片不能超过8MB，请重新选择', icon: 'none' });
+            return;
+          }
+
+          this.uploading = true;
+          const tempFilePath2 = tempFilePath;
+
           // 上传图片
           uni.showLoading({
             title: '上传中...'
           });
-          
-          // 上传图片到服务器
-          uni.uploadFile({
-            url: `${BASE_URL}/common/images/upload`,
-            filePath: tempFilePath,
-            name: 'file',
-            header: {
-              'Authorization': 'Bearer ' + uni.getStorageSync('token')
-            },
-            success: (uploadRes) => {
-              try {
-                
-                // 检查状态码
-                if (uploadRes.statusCode === 200) {
-                  let result;
-                  let imageUrl = null;
-                  
-                  // 尝试解析JSON响应
-                  try {
-                    result = JSON.parse(uploadRes.data);
-                    
-                    // 检查各种可能的字段
-                    if (result.file_url) {
-                      imageUrl = result.file_url;
-                    } else if (result.url) {
-                      imageUrl = result.url;
-                    } else if (result.image_url) {
-                      imageUrl = result.image_url;
-                    }
-                  } catch (parseError) {
-                    // 响应不是 JSON 时，仅当整体是一个合法 URL 才采用，避免把含链接的错误文本当图片地址
-                    if (typeof uploadRes.data === 'string' && /^https?:\/\/\S+$/.test(uploadRes.data.trim())) {
-                      imageUrl = uploadRes.data.trim();
-                    }
-                  }
-                  
-                  // 如果从响应中提取到了URL
-                  if (imageUrl) {
-                    
-                    // 设置图片URL
-                    if (type === 'lost') {
-                      this.lostForm.image_url = imageUrl;
-                    } else {
-                      this.foundForm.image_url = imageUrl;
-                    }
-                    
-                    // 显示成功提示
-                    uni.hideLoading();
-                    uni.showToast({
-                      title: '图片上传成功',
-                      icon: 'success'
-                    });
-                    
-                    // 调用后端接口识别图片标签
-                    this.recognizeImageLabels(imageUrl, type);
-                  } else {
-                    // 尝试从整个响应对象中查找URL
-                    const responseStr = JSON.stringify(uploadRes);
-                    const urlMatch = responseStr.match(/(http[s]?:\/\/[^\s"']+)/);
-                    if (urlMatch && urlMatch[1]) {
-                      imageUrl = urlMatch[1];
-                      
-                      if (type === 'lost') {
-                        this.lostForm.image_url = imageUrl;
-                      } else {
-                        this.foundForm.image_url = imageUrl;
-                      }
-                      
-                      // 调用后端接口识别图片标签
-                      this.recognizeImageLabels(imageUrl, type);
-                      
-                      uni.hideLoading();
-                      uni.showToast({
-                        title: '图片上传成功',
-                        icon: 'success'
-                      });
-                    } else {
-                      uni.hideLoading();
-                      uni.showToast({
-                        title: '图片上传成功，但获取URL失败',
-                        icon: 'none'
-                      });
-                    }
-                  }
-                } else {
-                  uni.hideLoading();
-                  uni.showToast({
-                    title: '图片上传失败',
-                    icon: 'none'
-                  });
-                }
-              } catch (error) {
-                uni.hideLoading();
-                uni.showToast({
-                  title: '上传过程中出错',
-                  icon: 'none'
-                });
+
+          // 上传图片到服务器（统一封装：自动携带并刷新 token）
+          request.uploadFile({
+            url: '/common/images/upload',
+            filePath: tempFilePath2,
+            name: 'file'
+          }).then((result) => {
+            // 提取图片URL（uploadFile 帮助函数已解析 JSON）
+            let imageUrl = null;
+            if (result && typeof result === 'object') {
+              if (result.file_url) {
+                imageUrl = result.file_url;
+              } else if (result.url) {
+                imageUrl = result.url;
+              } else if (result.image_url) {
+                imageUrl = result.image_url;
               }
-            },
-            fail: (err) => {
+            } else if (typeof result === 'string' && /^https?:\/\/\S+$/.test(result.trim())) {
+              // 响应不是 JSON 时，仅当整体是一个合法 URL 才采用
+              imageUrl = result.trim();
+            }
+
+            // 如果从响应中提取到了URL
+            if (imageUrl) {
+              // 设置图片URL
+              if (type === 'lost') {
+                this.lostForm.image_url = imageUrl;
+              } else {
+                this.foundForm.image_url = imageUrl;
+              }
+
+              // 显示成功提示
               uni.hideLoading();
               uni.showToast({
-                title: '网络错误，上传失败',
+                title: '图片上传成功',
+                icon: 'success'
+              });
+
+              // 调用后端接口识别图片标签
+              this.recognizeImageLabels(imageUrl, type);
+            } else {
+              uni.hideLoading();
+              uni.showToast({
+                title: '图片上传成功，但获取URL失败',
                 icon: 'none'
               });
             }
+          }).catch(() => {
+            uni.hideLoading();
+            uni.showToast({
+              title: '网络错误，上传失败',
+              icon: 'none'
+            });
+          }).finally(() => {
+            this.uploading = false;
           });
         }
       });
@@ -443,81 +423,72 @@ export default {
       uni.showLoading({
         title: '识别物品中...'
       });
-      
-      uni.request({
-        url: `${BASE_URL}/common/images/labels`,
+
+      request({
+        url: '/common/images/labels',
         method: 'POST',
-        header: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + uni.getStorageSync('token')
-        },
         data: {
           image_url: imageUrl
-        },
-        success: (res) => {
-          uni.hideLoading();
-          
-          if (res.statusCode === 200) {
-            
-            // 如果返回了标签信息
-            if (res.data.FirstCategory || res.data.SecondCategory) {
-              // 根据返回的标签设置物品类别
-              let category = '';
-              
-              // 优先使用SecondCategory作为物品类别
-              if (res.data.SecondCategory) {
-                category = res.data.SecondCategory;
-              } else if (res.data.FirstCategory) {
-                category = res.data.FirstCategory;
+        }
+      }).then((data) => {
+        uni.hideLoading();
+
+        // 如果返回了标签信息
+        if (data.FirstCategory || data.SecondCategory) {
+          // 根据返回的标签设置物品类别
+          let category = '';
+
+          // 优先使用SecondCategory作为物品类别
+          if (data.SecondCategory) {
+            category = data.SecondCategory;
+          } else if (data.FirstCategory) {
+            category = data.FirstCategory;
+          }
+
+
+          // 将英文类别转换为中文类别
+          const categoryMapping = {
+            'Electronics': '电子产品',
+            'Document': '证件',
+            'Wallet': '钱包/钱物',
+            'Key': '钥匙',
+            'Book': '书籍',
+            'Clothing': '衣物'
+          };
+
+          // 如果有映射关系，使用中文类别
+          if (categoryMapping[category]) {
+            category = categoryMapping[category];
+          } else {
+            // 尝试匹配关键词
+            for (const [key, value] of Object.entries(categoryMapping)) {
+              if (category.toLowerCase().includes(key.toLowerCase()) ||
+                  (data.FirstCategory && data.FirstCategory.toLowerCase().includes(key.toLowerCase()))) {
+                category = value;
+                break;
               }
-              
-              
-              // 将英文类别转换为中文类别
-              const categoryMapping = {
-                'Electronics': '电子产品',
-                'Document': '证件',
-                'Wallet': '钱包/钱物',
-                'Key': '钥匙',
-                'Book': '书籍',
-                'Clothing': '衣物'
-              };
-              
-              // 如果有映射关系，使用中文类别
-              if (categoryMapping[category]) {
-                category = categoryMapping[category];
-              } else {
-                // 尝试匹配关键词
-                for (const [key, value] of Object.entries(categoryMapping)) {
-                  if (category.toLowerCase().includes(key.toLowerCase()) || 
-                      (res.data.FirstCategory && res.data.FirstCategory.toLowerCase().includes(key.toLowerCase()))) {
-                    category = value;
-                    break;
-                  }
-                }
-              }
-              
-              // 设置对应表单的类别
-              if (type === 'lost') {
-                this.lostForm.category = category;
-              } else {
-                this.foundForm.category = category;
-              }
-              
-              // 显示提示
-              uni.showToast({
-                title: '已自动识别物品类别',
-                icon: 'success'
-              });
             }
           }
-        },
-        fail: (err) => {
-          uni.hideLoading();
+
+          // 设置对应表单的类别
+          if (type === 'lost') {
+            this.lostForm.category = category;
+          } else {
+            this.foundForm.category = category;
+          }
+
+          // 显示提示
           uni.showToast({
-            title: '图片识别失败，请手动填写类别',
-            icon: 'none'
+            title: '已自动识别物品类别',
+            icon: 'success'
           });
         }
+      }).catch(() => {
+        uni.hideLoading();
+        uni.showToast({
+          title: '图片识别失败，请手动填写类别',
+          icon: 'none'
+        });
       });
     },
 
@@ -758,92 +729,53 @@ export default {
 };
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 /* 页面容器样式 */
 .publish-container {
   min-height: 100vh;
-  background-color: #f8f8f8;
+  background-color: $uni-bg-color-grey;
   display: flex;
   flex-direction: column;
 }
 
-/* 标签栏样式 */
+/* ===== 标签栏（分段控件） ===== */
 .tabs {
-  display: flex;
-  height: 100rpx;
-  background-color: #fff;
-  margin-bottom: 20rpx;
-  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+  padding: 24rpx;
+  background-color: $uni-bg-color;
+  box-shadow: 0 2rpx 12rpx rgba(31, 41, 55, 0.04);
 }
 
-.tab-item {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28rpx;
-  color: #666;
-  position: relative;
-  flex-direction: column;
-  padding: 10rpx 0;
+.publish-segment .lf-segment-item {
+  height: 72rpx;
 }
 
-.tab-icon {
-  margin-bottom: 5rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tab-text {
-  font-size: 26rpx;
-}
-
-/* 激活状态的标签样式 */
-.tab-item.active {
-  color: #007AFF;
-  font-weight: bold;
-}
-
-.tab-item.active::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60rpx;
-  height: 4rpx;
-  background-color: #007AFF;
-  border-radius: 2rpx;
-}
-
-/* 表单区域样式 */
+/* ===== 表单区域 ===== */
 .form-scroll {
   flex: 1;
 }
 
 .form-container {
-  padding: 20rpx 30rpx 50rpx;
+  padding: 24rpx 24rpx 50rpx;
 }
 
 .form-card {
-  background-color: #fff;
-  border-radius: 20rpx;
-  padding: 30rpx;
-  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+  background-color: $uni-bg-color;
+  border-radius: $uni-border-radius-card;
+  padding: 32rpx 28rpx 8rpx;
+  box-shadow: $uni-shadow-card;
   margin-bottom: 30rpx;
 }
 
-/* 表单项样式 */
+/* 表单项 */
 .form-item {
-  margin-bottom: 30rpx;
+  margin-bottom: 32rpx;
   position: relative;
 }
 
 .form-label {
-  font-size: 28rpx;
-  color: #333;
-  margin-bottom: 15rpx;
+  font-size: $uni-font-size-base;
+  color: $uni-text-color;
+  margin-bottom: 16rpx;
   display: block;
   font-weight: 500;
 }
@@ -851,89 +783,129 @@ export default {
 /* 必填项标记 */
 .form-label.required::before {
   content: '*';
-  color: #ff4d4f;
-  margin-right: 5rpx;
+  color: $uni-color-error;
+  margin-right: 6rpx;
 }
 
-/* 表单输入框样式 */
+/* 表单输入框（浅底圆角字段） */
 .form-input {
-  height: 90rpx;
-  background-color: #f8f8f8;
-  border-radius: 10rpx;
-  padding: 0 20rpx;
-  font-size: 28rpx;
-  color: #333;
-  border: 1rpx solid #eee;
+  height: 88rpx;
+  background-color: $uni-bg-color-section;
+  border-radius: $uni-radius-md;
+  padding: 0 24rpx;
+  font-size: $uni-font-size-base;
+  color: $uni-text-color;
+  border: 2rpx solid transparent;
+  box-sizing: border-box;
+  transition: border-color 0.15s, background-color 0.15s;
+
+  &:focus {
+    border-color: $uni-color-primary;
+    background-color: $uni-bg-color;
+  }
 }
 
 /* 日期选择器容器 */
+/* 此容器包裹 uni-datetime-picker：其日历弹层为 position:absolute 且在文档流内，
+   加 overflow:hidden 会把弹层裁剪到只剩一行（时间选择器不可用）；
+   z-index 需高于底部 tabbar(998)，否则弹层下半部分（确定按钮）会被 tabbar 遮挡 */
 .date-picker-container {
-  background-color: #f8f8f8;
-  border-radius: 10rpx;
-  border: 1rpx solid #eee;
-  overflow: hidden;
+  background-color: $uni-bg-color-section;
+  border-radius: $uni-radius-md;
+  border: 2rpx solid transparent;
+  position: relative;
+  z-index: 1000;
 }
 
-/* 多行文本输入框样式 */
+/* 多行文本输入框 */
 .form-textarea {
   height: 200rpx;
-  background-color: #f8f8f8;
-  border-radius: 10rpx;
-  padding: 20rpx;
-  font-size: 28rpx;
-  color: #333;
-  width: auto;
-  border: 1rpx solid #eee;
+  background-color: $uni-bg-color-section;
+  border-radius: $uni-radius-md;
+  padding: 20rpx 24rpx;
+  font-size: $uni-font-size-base;
+  color: $uni-text-color;
+  width: 100%;
+  box-sizing: border-box;
+  border: 2rpx solid transparent;
+  line-height: 1.6;
+  transition: border-color 0.15s, background-color 0.15s;
+
+  &:focus {
+    border-color: $uni-color-primary;
+    background-color: $uni-bg-color;
+  }
 }
 
 /* 文本计数器 */
 .textarea-counter {
   position: absolute;
-  right: 20rpx;
+  right: 24rpx;
   bottom: 20rpx;
-  font-size: 24rpx;
-  color: #999;
+  font-size: $uni-font-size-caption;
+  color: $uni-text-color-grey;
 }
 
-/* 图片上传区域样式 */
+/* ===== 图片上传 ===== */
 .upload-container {
   display: flex;
   flex-direction: column;
 }
 
 .upload-btn {
-  width: 200rpx;
-  height: 200rpx;
-  background-color: #f8f8f8;
-  border-radius: 10rpx;
+  width: 220rpx;
+  height: 220rpx;
+  background-color: $uni-bg-color-section;
+  border-radius: $uni-radius-md;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 1rpx dashed #ddd;
+  border: 2rpx dashed $uni-border-color-input;
+  transition: border-color 0.15s;
+
+  &:active {
+    border-color: $uni-color-primary;
+  }
 }
 
 .upload-icon {
-  font-size: 60rpx;
-  color: #ccc;
-  margin-bottom: 10rpx;
+  margin-bottom: 14rpx;
 }
 
 .upload-text {
-  font-size: 24rpx;
-  color: #999;
+  font-size: $uni-font-size-caption;
+  color: $uni-text-color-grey;
 }
 
 .upload-tip {
-  font-size: 24rpx;
-  color: #999;
-  margin-top: 10rpx;
+  font-size: $uni-font-size-caption;
+  color: $uni-text-color-grey;
+  margin-top: 14rpx;
+  line-height: 1.5;
 }
 
-/* 图片预览区域样式 */
+/* 类别选择器行 */
+.picker-input {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.picker-value {
+  font-size: $uni-font-size-base;
+  color: $uni-text-color;
+}
+
+.picker-placeholder {
+  font-size: $uni-font-size-base;
+  color: $uni-text-color-placeholder;
+}
+
+/* 图片预览 */
 .upload-preview {
-  width: 200rpx;
-  height: 200rpx;
+  width: 220rpx;
+  height: 220rpx;
   position: relative;
   margin-right: 20rpx;
 }
@@ -941,123 +913,84 @@ export default {
 .preview-image {
   width: 100%;
   height: 100%;
-  border-radius: 10rpx;
-  border: 1rpx solid #eee;
+  border-radius: $uni-radius-md;
+  border: 1rpx solid $uni-border-color-split;
 }
 
 /* 删除图片按钮 */
 .delete-icon {
   position: absolute;
-  top: -20rpx;
-  right: -20rpx;
-  width: 40rpx;
-  height: 40rpx;
-  background-color: rgba(0, 0, 0, 0.5);
-  color: #fff;
-  border-radius: 20rpx;
+  top: -16rpx;
+  right: -16rpx;
+  width: 44rpx;
+  height: 44rpx;
+  background-color: rgba(0, 0, 0, 0.55);
+  color: $uni-text-color-inverse;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32rpx;
 }
 
-/* 提交按钮样式 */
+/* ===== 提交按钮 ===== */
 .submit-btn {
-  height: 90rpx;
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  color: #fff;
-  border-radius: 45rpx;
-  font-size: 32rpx;
-  margin-top: 20rpx;
+  height: 92rpx;
+  background-color: $uni-color-primary;
+  color: $uni-text-color-inverse;
+  border-radius: $uni-border-radius-btn;
+  font-size: $uni-font-size-lg;
+  margin-top: 10rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 5rpx 15rpx rgba(0, 122, 255, 0.3);
+  box-shadow: $uni-shadow-btn;
+  border: none;
+
+  &::after {
+    border: none;
+  }
+
+  &:active {
+    background-color: $uni-color-primary-deep;
+    transform: scale(0.99);
+  }
 }
 
 .submit-icon {
-  margin-right: 10rpx;
+  margin-right: 12rpx;
   display: flex;
   align-items: center;
 }
 
 .submit-text {
-  font-size: 28rpx;
-  color: #fff;
+  font-size: $uni-font-size-lg;
+  color: $uni-text-color-inverse;
+  font-weight: 500;
 }
 
-/* 表单提示信息样式 */
+/* ===== 温馨提示 ===== */
 .form-tips {
-  margin-top: 40rpx;
-  background-color: #f8f8f8;
-  padding: 20rpx;
-  border-radius: 10rpx;
+  margin-top: 32rpx;
+  background-color: $uni-color-primary-softer;
+  border: 2rpx solid rgba($uni-color-primary, 0.12);
+  padding: 24rpx;
+  border-radius: $uni-radius-md;
 }
 
 .tips-title {
-  font-size: 26rpx;
-  color: #666;
-  font-weight: bold;
-  margin-bottom: 10rpx;
+  font-size: $uni-font-size-base;
+  color: $uni-color-primary;
+  font-weight: 600;
+  margin-bottom: 12rpx;
   display: block;
 }
 
 .tips-content {
-  font-size: 24rpx;
-  color: #999;
-  line-height: 1.6;
+  font-size: $uni-font-size-caption;
+  color: $uni-text-color-grey;
+  line-height: 1.8;
   display: block;
 }
 
-/* 未登录状态样式 */
-.login-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding-top: 200rpx;
-}
-
-.login-image {
-  width: 200rpx;
-  height: 200rpx;
-  margin-bottom: 40rpx;
-}
-
-.login-tips {
-  font-size: 30rpx;
-  color: #666;
-  margin-bottom: 40rpx;
-}
-
-/* 登录按钮组样式 */
-.login-btns {
-  display: flex;
-  justify-content: center;
-  width: 500rpx;
-  margin-top: 30rpx;
-  gap: 40rpx;
-}
-
-.btn {
-  width: 220rpx;
-  height: 90rpx;
-  font-size: 30rpx;
-  border-radius: 45rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.login-btn {
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  color: #fff;
-  box-shadow: 0 5rpx 15rpx rgba(0, 122, 255, 0.3);
-}
-
-.register-btn {
-  background-color: #fff;
-  color: #007AFF;
-  border: 1px solid #007AFF;
-}
-</style> 
+/* 未登录引导块样式见 styles/common.scss（.lf-login-guide） */
+</style>

@@ -1,91 +1,112 @@
 <template>
 	<view class="detail-container">
-		<!-- 加载状态 -->
-		<view class="loading-container" v-if="loading">
-			<uni-load-more status="loading" :content-text="loadingText"></uni-load-more>
+		<!-- 加载骨架屏：首屏占位（呼吸动画样式见 common.scss .skeleton-block） -->
+		<view class="skeleton-wrap" v-if="loading">
+			<view class="detail-card skeleton-card">
+				<view class="skeleton-block skeleton-title"></view>
+				<view class="skeleton-block skeleton-subtitle"></view>
+			</view>
+			<view class="detail-card skeleton-card">
+				<view class="skeleton-block skeleton-image"></view>
+			</view>
+			<view class="detail-card skeleton-card">
+				<view class="skeleton-block skeleton-line"></view>
+				<view class="skeleton-block skeleton-line"></view>
+				<view class="skeleton-block skeleton-line skeleton-line-short"></view>
+			</view>
 		</view>
 		
-		<!-- 物品详情卡片 -->
-		<view class="detail-card" v-else>
-			<!-- 详情页头部 -->
-			<view class="detail-header">
-				<text class="detail-title">{{ item.name }}</text>
-				<view class="status-tag" :class="{'completed': item.is_completed}">
-					{{ item.is_completed ? (itemType === 'lost' ? '已找到' : '已归还') : (itemType === 'lost' ? '寻找中' : '招领中') }}
+		<block v-else>
+			<!-- 标题卡片 -->
+			<view class="detail-card header-card">
+				<view class="header-top">
+					<text class="detail-title">{{ item.name }}</text>
+					<lf-status-tag
+						:status="item.is_completed ? 'completed' : 'open'"
+						:label="item.is_completed ? (itemType === 'lost' ? '已找到' : '已归还') : (itemType === 'lost' ? '寻找中' : '招领中')"
+					/>
 				</view>
-				<text class="detail-time">发布时间：{{ formatDate(item.created_at) }}</text>
+				<view class="header-meta">
+					<uni-icons type="clock" size="13" :color="colorGrey" />
+					<text class="detail-time">发布于 {{ publishedText }}</text>
+				</view>
 			</view>
 			
-			<!-- 详情内容区域 -->
-			<view class="detail-content">
-				<!-- 物品图片 -->
-				<view class="detail-images" v-if="item.image_url">
-					<image :src="item.image_url" mode="aspectFill" @click="previewImage"></image>
+			<!-- 图片卡片 -->
+			<view class="detail-card image-card" v-if="item.image_url">
+				<image class="detail-image" :src="item.image_url" mode="aspectFill" @click="previewImage"></image>
+			</view>
+			
+			<!-- 信息卡片 -->
+			<view class="detail-card">
+				<view class="lf-section-head">
+					<text class="lf-section-title">物品信息</text>
 				</view>
-				
-				<!-- 物品信息列表 -->
 				<view class="detail-info">
 					<view class="info-item">
-						<text class="info-label">物品类别：</text>
+						<view class="info-icon"><uni-icons type="flag" size="16" :color="colorPrimary" /></view>
+						<text class="info-label">物品类别</text>
 						<text class="info-value">{{ item.category }}</text>
 					</view>
 					<view class="info-item">
-						<text class="info-label">{{ itemType === 'lost' ? '丢失地点：' : '拾取地点：' }}</text>
+						<view class="info-icon"><uni-icons type="location-filled" size="16" :color="colorPrimary" /></view>
+						<text class="info-label">{{ itemType === 'lost' ? '丢失地点' : '拾取地点' }}</text>
 						<text class="info-value">{{ item.location || '未知' }}</text>
 					</view>
 					<view class="info-item">
-						<text class="info-label">{{ itemType === 'lost' ? '丢失时间：' : '拾取时间：' }}</text>
+						<view class="info-icon"><uni-icons type="calendar" size="16" :color="colorPrimary" /></view>
+						<text class="info-label">{{ itemType === 'lost' ? '丢失时间' : '拾取时间' }}</text>
 						<text class="info-value">{{ formatDate(itemType === 'lost' ? item.lost_time : item.found_time) }}</text>
 					</view>
 					<view class="info-item">
-						<text class="info-label">联系方式：</text>
+						<view class="info-icon"><uni-icons type="phone" size="16" :color="colorPrimary" /></view>
+						<text class="info-label">联系方式</text>
 						<text class="info-value">{{ item.contact }}</text>
-					</view>
-					<view class="info-item">
-						<text class="info-label">物品ID：</text>
-						<text class="info-value">{{ item.id || '未知' }}</text>
-					</view>
-					<view class="info-item">
-						<text class="info-label">发布者ID：</text>
-						<text class="info-value">{{ item.user_id || '未知' }}</text>
-					</view>
-					<view class="info-item">
-						<text class="info-label">创建时间：</text>
-						<text class="info-value">{{ formatDate(item.created_at) }}</text>
-					</view>
-					<view class="info-item description">
-						<text class="info-label">详细描述：</text>
-						<text class="info-value">{{ item.description }}</text>
 					</view>
 				</view>
 			</view>
 			
-			<!-- 底部操作区域 -->
-			<view class="detail-footer">
+			<!-- 描述卡片 -->
+			<view class="detail-card">
+				<view class="lf-section-head">
+					<text class="lf-section-title">详细描述</text>
+				</view>
+				<text class="detail-desc">{{ item.description || '发布者未填写详细描述' }}</text>
+			</view>
+			
+			<!-- 底部固定操作栏 -->
+			<view class="action-bar">
 				<!-- 非自己发布的物品显示联系按钮 -->
-				<button class="contact-btn" @click="contactOwner" v-if="!isMyItem">联系发布者</button>
+				<button class="bar-btn primary contact-btn" @click="contactOwner" v-if="!isMyItem">
+					<uni-icons type="chatboxes-filled" size="18" color="#ffffff" style="margin-right: 10rpx" />
+					联系发布者
+				</button>
 				
 				<!-- 自己发布的物品显示管理按钮 -->
 				<view class="my-item-actions" v-else>
-					<button class="edit-btn" @click="editItem" :disabled="item.is_under_review">编辑</button>
-					<button class="status-btn" @click="toggleStatus" :disabled="item.is_under_review">
+					<button class="bar-btn ghost edit-btn" @click="editItem" :disabled="item.is_under_review">编辑</button>
+					<button class="bar-btn primary status-btn" @click="toggleStatus" :disabled="item.is_under_review">
 						{{ item.is_completed ? '重新发布' : (itemType === 'lost' ? '确认已找到' : '确认已归还') }}
 					</button>
-					<button class="delete-btn" @click="deleteItem" :disabled="item.is_under_review">删除</button>
-				</view>
-				
-				<!-- 审核中提示 -->
-				<view class="review-notice" v-if="isMyItem && item.is_under_review">
-					<text>物品信息正在审核中，暂时无法编辑或删除</text>
+					<button class="bar-btn danger delete-btn" @click="deleteItem" :disabled="item.is_under_review">删除</button>
 				</view>
 			</view>
-		</view>
+			
+			<!-- 审核中提示 -->
+			<view class="review-notice" v-if="isMyItem && item.is_under_review">
+				<uni-icons type="info-filled" size="14" :color="colorWarning" />
+				<text>物品信息正在审核中，暂时无法编辑或删除</text>
+			</view>
+		</block>
 	</view>
 </template>
 
 <script>
 import { BASE_URL } from '@/config';
+import { COLOR_ERROR, COLOR_GREY, COLOR_PRIMARY, COLOR_WARNING } from '@/config/ui';
 import { mapGetters } from 'vuex';
+import { relativeTime } from '@/utils/common';
+import request from '@/utils/request';
 
 /**
  * 物品详情页组件
@@ -94,19 +115,15 @@ import { mapGetters } from 'vuex';
 export default {
 	data() {
 		return {
+			colorPrimary: COLOR_PRIMARY, // 主色（信息行图标）
+			colorGrey: COLOR_GREY, // 辅助灰（时间戳图标）
+			colorWarning: COLOR_WARNING, // 警告橙（审核提示图标）
 			id: null, // 物品ID
 			itemType: '', // 物品类型：'lost'或'found'
 			isMyItem: false, // 是否为当前用户发布的物品
 			isFromMyPublish: false, // 是否从"我的发布"页面进入
 			loading: true, // 加载状态
-			
-			// 加载提示文本
-			loadingText: {
-				contentdown: '加载中...',
-				contentrefresh: '加载中...',
-				contentnomore: '没有更多数据了'
-			},
-			
+
 			// 物品信息对象
 			item: {
 				id: '',
@@ -134,6 +151,16 @@ export default {
 		// API基础URL
 		baseUrl() {
 			return BASE_URL;
+		},
+		
+		// 发布时间：7 天内相对化（3天前），更早显示 x月x日
+		publishedText() {
+			const d = this.item.created_at ? new Date(this.item.created_at) : null;
+			if (!d || isNaN(d.getTime())) return '未知';
+			if (Date.now() - d.getTime() < 7 * 24 * 3600 * 1000) {
+				return relativeTime(d);
+			}
+			return `${d.getMonth() + 1}月${d.getDate()}日`;
 		}
 	},
 	
@@ -215,43 +242,28 @@ export default {
 				this.getPublicItemDetail();
 				return;
 			}
-			
-			// 使用用户接口获取详情
-			const url = `${this.baseUrl}/user/${this.itemType}-items/${this.id}/detail`;
-			
-			uni.request({
-				url: url,
-				method: 'GET',
-				header: {
-					'Authorization': `Bearer ${token}`
-				},
-				success: (res) => {
-					if (res.statusCode === 200) {
-						this.item = res.data;
 
-						// 检查是否是当前用户发布的物品
-						this.checkIsMyItem();
-					} else {
-						uni.showToast({
-							title: (res.data && res.data.error) || '获取物品详情失败',
-							icon: 'none',
-							duration: 2000
-						});
+			// 使用用户接口获取详情（统一封装：token 过期自动刷新）
+			request({
+				url: `/user/${this.itemType}-items/${this.id}/detail`,
+				method: 'GET'
+			}).then((data) => {
+				this.item = data;
 
-						setTimeout(() => {
-							uni.navigateBack();
-						}, 2000);
-					}
-				},
-				fail: () => {
-					uni.showToast({
-						title: '网络错误，请稍后重试',
-						icon: 'none'
-					});
-				},
-				complete: () => {
-					this.loading = false;
-				}
+				// 检查是否是当前用户发布的物品
+				this.checkIsMyItem();
+			}).catch((error) => {
+				uni.showToast({
+					title: (error && error.error) || '获取物品详情失败',
+					icon: 'none',
+					duration: 2000
+				});
+
+				setTimeout(() => {
+					uni.navigateBack();
+				}, 2000);
+			}).finally(() => {
+				this.loading = false;
 			});
 		},
 
@@ -262,6 +274,7 @@ export default {
 		getPublicItemDetail() {
 			const url = `${this.baseUrl}/common/${this.itemType}-items/${this.id}`;
 
+			// 公开接口无需登录态；用 uni.request 直连，避免统一封装在未登录时触发刷新逻辑
 			uni.request({
 				url: url,
 				method: 'GET',
@@ -285,7 +298,7 @@ export default {
 								icon: 'none'
 							});
 						}
-						
+
 						setTimeout(() => {
 							uni.navigateBack();
 						}, 2000);
@@ -404,44 +417,31 @@ export default {
 		 */
 		updateItemStatus() {
 			const url = `${this.baseUrl}/user/${this.itemType}-items/${this.id}`;
-			
-			uni.request({
-				url: url,
+
+			request({
+				url: `/user/${this.itemType}-items/${this.id}`,
 				method: 'PUT',
-				header: {
-					'Authorization': `Bearer ${uni.getStorageSync('token')}`,
-					'Content-Type': 'application/json'
-				},
 				data: {
 					is_completed: !this.item.is_completed
-				},
-				success: (res) => {
-					if (res.statusCode === 200) {
-						uni.showToast({
-							title: '状态更新成功',
-							icon: 'success'
-						});
-						
-						// 更新本地数据
-						this.item.is_completed = !this.item.is_completed;
-						
-						// 如果服务器返回了审核状态，更新本地数据
-						if (res.data && res.data.is_under_review !== undefined) {
-							this.item.is_under_review = res.data.is_under_review;
-						}
-					} else {
-						uni.showToast({
-							title: res.data?.error || '更新失败',
-							icon: 'none'
-						});
-					}
-				},
-				fail: () => {
-					uni.showToast({
-						title: '网络错误，请稍后重试',
-						icon: 'none'
-					});
 				}
+			}).then((data) => {
+				uni.showToast({
+					title: '状态更新成功',
+					icon: 'success'
+				});
+
+				// 更新本地数据
+				this.item.is_completed = !this.item.is_completed;
+
+				// 如果服务器返回了审核状态，更新本地数据
+				if (data && data.is_under_review !== undefined) {
+					this.item.is_under_review = data.is_under_review;
+				}
+			}).catch((error) => {
+				uni.showToast({
+					title: (error && error.error) || '更新失败',
+					icon: 'none'
+				});
 			});
 		},
 		
@@ -455,7 +455,7 @@ export default {
 			uni.showModal({
 				title: '警告',
 				content: '确定要删除该物品吗？此操作不可撤销！',
-				confirmColor: '#FF0000',
+				confirmColor: COLOR_ERROR,
 				success: (res) => {
 					if (res.confirm) {
 						this.confirmDelete();
@@ -469,251 +469,279 @@ export default {
 		 * 向服务器发送删除请求
 		 */
 		confirmDelete() {
-			const url = `${this.baseUrl}/user/${this.itemType}-items/${this.id}`;
-			
-			uni.request({
-				url: url,
-				method: 'DELETE',
-				header: {
-					'Authorization': `Bearer ${uni.getStorageSync('token')}`
-				},
-				success: (res) => {
-					if (res.statusCode === 200) {
-						uni.showToast({
-							title: '删除成功',
-							icon: 'success'
-						});
-						setTimeout(() => {
-							uni.navigateBack();
-						}, 1500);
-					} else {
-						uni.showToast({
-							title: res.data?.error || '删除失败',
-							icon: 'none'
-						});
-					}
-				},
-				fail: () => {
-					uni.showToast({
-						title: '网络错误，请稍后重试',
-						icon: 'none'
-					});
-				}
+			request({
+				url: `/user/${this.itemType}-items/${this.id}`,
+				method: 'DELETE'
+			}).then(() => {
+				uni.showToast({
+					title: '删除成功',
+					icon: 'success'
+				});
+				setTimeout(() => {
+					uni.navigateBack();
+				}, 1500);
+			}).catch((error) => {
+				uni.showToast({
+					title: (error && error.error) || '删除失败',
+					icon: 'none'
+				});
 			});
 		}
 	}
 }
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 /* 详情页容器 */
 .detail-container {
-	padding: 20rpx;
+	padding: 24rpx 24rpx 180rpx; /* 底部留出自定义操作栏高度 */
 	min-height: 100vh;
-	background-color: #f5f5f5;
+	background-color: $uni-bg-color-grey;
 	width: 100%;
 	box-sizing: border-box;
-	
-	/* 加载状态容器 */
-	.loading-container {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		height: 80vh;
+}
+
+/* ===== 通用卡片 ===== */
+.detail-card {
+	background-color: $uni-bg-color;
+	border-radius: $uni-border-radius-card;
+	box-shadow: $uni-shadow-card;
+	overflow: hidden;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 0 28rpx 28rpx;
+	margin-bottom: 24rpx;
+
+	&:last-child {
+		margin-bottom: 0;
 	}
-	
-	/* 详情卡片 */
-	.detail-card {
-		background-color: #fff;
-		border-radius: 12rpx;
-		box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.1);
-		overflow: hidden;
-		width: 100%;
-		box-sizing: border-box;
-		
-		/* 详情头部 */
-		.detail-header {
-			padding: 30rpx;
-			border-bottom: 1rpx solid #f5f5f5;
-			position: relative;
-			
-			/* 标题 */
-			.detail-title {
-				font-size: 36rpx;
-				font-weight: bold;
-				color: #333;
-				display: block;
-				margin-bottom: 10rpx;
-				padding-right: 150rpx;
-			}
-			
-			/* 状态标签 */
-			.status-tag {
-				position: absolute;
-				top: 30rpx;
-				right: 30rpx;
-				background-color: #007AFF;
-				color: #fff;
-				font-size: 24rpx;
-				padding: 6rpx 20rpx;
-				border-radius: 30rpx;
-				
-				&.completed {
-					background-color: #8F8F8F;
-				}
-			}
-			
-			/* 时间显示 */
-			.detail-time {
-				font-size: 24rpx;
-				color: #999;
-			}
+}
+
+/* 首屏骨架屏各占位块（与真实卡片结构对齐） */
+.skeleton-card {
+	pointer-events: none;
+	padding: 32rpx 28rpx;
+}
+
+.skeleton-title {
+	width: 40%;
+	height: 40rpx;
+	margin-bottom: 18rpx;
+}
+
+.skeleton-subtitle {
+	width: 25%;
+	height: 24rpx;
+}
+
+.skeleton-image {
+	width: 100%;
+	height: 400rpx;
+	border-radius: $uni-radius-md;
+}
+
+.skeleton-line {
+	width: 100%;
+	height: 28rpx;
+	margin-bottom: 24rpx;
+}
+
+.skeleton-line-short {
+	width: 55%;
+	margin-bottom: 0;
+}
+
+/* ===== 标题卡片 ===== */
+.header-card {
+	padding: 32rpx 28rpx;
+}
+
+.header-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	margin-bottom: 18rpx;
+}
+
+.detail-title {
+	font-size: 40rpx;
+	font-weight: 600;
+	color: $uni-text-color;
+	line-height: 1.3;
+	flex: 1;
+	min-width: 0;
+	margin-right: 20rpx;
+}
+
+.header-meta {
+	display: flex;
+	align-items: center;
+}
+
+.detail-time {
+	font-size: $uni-font-size-caption;
+	color: $uni-text-color-grey;
+	margin-left: 8rpx;
+}
+
+/* ===== 图片卡片 ===== */
+.image-card {
+	padding: 0;
+}
+
+.detail-image {
+	width: 100%;
+	height: 440rpx;
+	display: block;
+}
+
+/* ===== 信息列表（图标 + 标签 + 值） ===== */
+.detail-info {
+	width: 100%;
+	box-sizing: border-box;
+	padding-top: 8rpx;
+
+	.info-item {
+		display: flex;
+		align-items: center;
+		padding: 22rpx 0;
+		border-bottom: 1rpx solid $uni-border-color-split;
+
+		&:last-child {
+			border-bottom: none;
 		}
-		
-		/* 详情内容区 */
-		.detail-content {
-			padding: 30rpx;
-			box-sizing: border-box;
-			width: 100%;
-			
-			/* 图片区域 */
-			.detail-images {
-				margin-bottom: 30rpx;
-				
-				image {
-					width: 100%;
-					height: 400rpx;
-					border-radius: 8rpx;
-				}
-			}
-			
-			/* 信息列表 */
-			.detail-info {
-				width: 100%;
-				box-sizing: border-box;
-				
-				/* 信息项 */
-				.info-item {
-					margin-bottom: 20rpx;
-					display: flex;
-					align-items: flex-start;
-					
-					/* 标签 */
-					.info-label {
-						width: 200rpx;
-						color: #666;
-						font-size: 28rpx;
-						flex-shrink: 0;
-					}
-					
-					/* 值 */
-					.info-value {
-						flex: 1;
-						color: #333;
-						font-size: 28rpx;
-						word-break: break-word;
-					}
-					
-					/* 描述信息特殊样式 */
-					&.description {
-						display: block;
-						width: 100%;
-						padding-right: 0;
-						margin-right: 0;
-						
-						.info-label {
-							display: block;
-							width: 100%;
-							margin-bottom: 10rpx;
-						}
-						
-						.info-value {
-							display: block;
-							margin-top: 10rpx;
-							line-height: 1.6;
-							width: 100%;
-							text-align: left;
-							word-break: break-all;
-							padding-right: 0;
-							margin-right: 0;
-							max-width: 100%;
-						}
-					}
-				}
-			}
+
+		.info-icon {
+			width: 56rpx;
+			height: 56rpx;
+			border-radius: 50%;
+			background-color: $uni-color-primary-soft;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+			margin-right: 20rpx;
 		}
-		
-		/* 底部操作区 */
-		.detail-footer {
-			padding: 30rpx;
-			border-top: 1rpx solid #f5f5f5;
-			
-			/* 联系按钮 */
-			.contact-btn {
-				background-color: #007AFF;
-				color: #fff;
-				border-radius: 50rpx;
-				font-size: 30rpx;
-				height: 80rpx;
-				line-height: 80rpx;
-			}
-			
-			/* 我的物品操作按钮组 */
-			.my-item-actions {
-				display: flex;
-				justify-content: space-between;
-				
-				button {
-					flex: 1;
-					margin: 0 10rpx;
-					font-size: 28rpx;
-					height: 80rpx;
-					line-height: 80rpx;
-					border-radius: 50rpx;
-					
-					&:first-child {
-						margin-left: 0;
-					}
-					
-					&:last-child {
-						margin-right: 0;
-					}
-					
-					&[disabled] {
-						opacity: 0.6;
-					}
-				}
-				
-				/* 编辑按钮 */
-				.edit-btn {
-					background-color: #007AFF;
-					color: #fff;
-				}
-				
-				/* 状态切换按钮 */
-				.status-btn {
-					background-color: #FF9500;
-					color: #fff;
-				}
-				
-				/* 删除按钮 */
-				.delete-btn {
-					background-color: #FF3B30;
-					color: #fff;
-				}
-			}
-			
-			/* 审核提示 */
-			.review-notice {
-				margin-top: 20rpx;
-				text-align: center;
-				
-				text {
-					font-size: 24rpx;
-					color: #FF9500;
-				}
-			}
+
+		.info-label {
+			width: 160rpx;
+			color: $uni-text-color-grey;
+			font-size: $uni-font-size-base;
+			flex-shrink: 0;
+		}
+
+		.info-value {
+			flex: 1;
+			min-width: 0;
+			color: $uni-text-color;
+			font-size: $uni-font-size-base;
+			font-weight: 500;
+			word-break: break-word;
+			text-align: right;
 		}
 	}
 }
-</style> 
+
+/* ===== 描述卡片 ===== */
+.detail-desc {
+	display: block;
+	font-size: $uni-font-size-base;
+	color: $uni-text-color;
+	line-height: 1.8;
+	margin-top: 8rpx;
+	word-break: break-word;
+}
+
+/* ===== 底部固定操作栏 ===== */
+.action-bar {
+	position: fixed;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 99;
+	background-color: $uni-bg-color;
+	padding: 20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom));
+	box-shadow: 0 -4rpx 20rpx rgba(31, 41, 55, 0.06);
+}
+
+.bar-btn {
+	height: 88rpx;
+	border-radius: $uni-border-radius-btn;
+	font-size: $uni-font-size-md;
+	font-weight: 500;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	line-height: 1;
+
+	&::after {
+		border: none;
+	}
+
+	&.primary {
+		background-color: $uni-color-primary;
+		color: $uni-text-color-inverse;
+		box-shadow: $uni-shadow-btn;
+
+		&:active {
+			background-color: $uni-color-primary-deep;
+		}
+	}
+
+	&.ghost {
+		background-color: $uni-bg-color;
+		color: $uni-text-color;
+		border: 2rpx solid $uni-border-color;
+	}
+
+	&.danger {
+		background-color: $uni-color-error-soft;
+		color: $uni-color-error;
+	}
+
+	&[disabled] {
+		opacity: $uni-opacity-disabled;
+	}
+}
+
+/* 非本人：联系发布者占满 */
+.contact-btn {
+	width: 100%;
+}
+
+/* 本人：编辑 / 状态 / 删除 三键 */
+.my-item-actions {
+	display: flex;
+	gap: 20rpx;
+
+	.bar-btn {
+		flex: 1;
+	}
+
+	.status-btn {
+		flex: 1.4;
+	}
+}
+
+/* 审核提示（操作栏上方浮条） */
+.review-notice {
+	position: fixed;
+	left: 24rpx;
+	right: 24rpx;
+	bottom: 148rpx;
+	z-index: 98;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background-color: $uni-color-warning-soft;
+	border-radius: $uni-radius-md;
+	padding: 16rpx 20rpx;
+
+	text {
+		font-size: $uni-font-size-caption;
+		color: $uni-color-warning;
+		margin-left: 8rpx;
+	}
+}
+</style>

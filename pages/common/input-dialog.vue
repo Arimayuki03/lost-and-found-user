@@ -61,23 +61,25 @@ export default {
      * 将输入值通过事件通道传回调用页面
      */
     handleConfirm() {
-      const eventChannel = this.getOpenerEventChannel();
-      
+      const eventChannel = this.getOpenerEventChannel && this.getOpenerEventChannel();
+      if (!eventChannel) return;
+
       // 触发指定的回调事件，传递输入值
       eventChannel.emit(this.callbackEventName, {
         value: this.inputValue
       });
-      
+
       // 关闭当前页面，返回上一页
       uni.navigateBack();
     },
-    
+
     /**
      * 处理取消按钮点击
      * 触发cancel事件并返回上一页
      */
     handleCancel() {
-      const eventChannel = this.getOpenerEventChannel();
+      const eventChannel = this.getOpenerEventChannel && this.getOpenerEventChannel();
+      if (!eventChannel) return;
       eventChannel.emit('cancel');
       uni.navigateBack();
     }
@@ -85,7 +87,7 @@ export default {
 };
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 /* 对话框容器样式 */
 .input-dialog-container {
   padding: 30rpx;
@@ -94,14 +96,14 @@ export default {
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background-color: #f5f5f5;
+  background-color: $uni-bg-color-grey;
 }
 
 /* 对话框标题样式 */
 .dialog-title {
-  font-size: 36rpx;
-  font-weight: bold;
-  color: #333;
+  font-size: $uni-font-size-title;
+  font-weight: 600;
+  color: $uni-text-color;
   text-align: center;
   margin-bottom: 30rpx;
 }
@@ -116,28 +118,41 @@ export default {
   display: flex;
   justify-content: space-between;
   margin-top: 40rpx;
+  gap: 24rpx;
 }
 
 /* 通用按钮样式 */
 .uni-btn {
-  width: 45%;
-  height: 80rpx;
-  border-radius: 40rpx;
-  font-size: 28rpx;
+  flex: 1;
+  width: auto;
+  height: 84rpx;
+  border-radius: $uni-border-radius-btn;
+  font-size: $uni-font-size-base;
+  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: none;
+
+  &::after {
+    border: none;
+  }
+
+  &:active {
+    transform: scale(0.99);
+  }
 }
 
 /* 取消按钮样式 */
 .cancel-btn {
-  background-color: #f0f0f0;
-  color: #666;
+  background-color: $uni-bg-color-section;
+  color: $uni-text-color-grey;
 }
 
 /* 确认按钮样式 */
 .confirm-btn {
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  color: #fff;
+  background-color: $uni-color-primary;
+  color: $uni-text-color-inverse;
+  box-shadow: $uni-shadow-btn;
 }
 </style> 

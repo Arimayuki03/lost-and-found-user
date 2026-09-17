@@ -142,7 +142,7 @@
 		"navigationBarTextStyle": "black",
 		"navigationBarTitleText": "失物招领",
 		"navigationBarBackgroundColor": "#FFFFFF",
-		"backgroundColor": "#F8F8F8"
+		"backgroundColor": "#F5F7FA"
 	},
 	
 	/* 底部标签栏配置 */

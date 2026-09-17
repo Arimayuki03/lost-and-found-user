@@ -42,15 +42,15 @@
       <text class="loading-text">加载中...</text>
     </view>
     
-    <!-- 自定义注销账号确认弹窗 -->
-    <view class="custom-popup" v-if="showDeleteAccountPopup">
-      <view class="popup-mask" @tap="closeDeleteAccountPopup"></view>
-      <view class="popup-content">
-        <view class="popup-header">
-          <text class="popup-title">确认注销账号</text>
-          <text class="popup-close" @tap="closeDeleteAccountPopup">×</text>
+    <!-- 自定义注销账号确认弹窗（底部抽屉，公共样式见 common.scss .lf-popup） -->
+    <view class="lf-popup" v-if="showDeleteAccountPopup">
+      <view class="lf-popup-mask" @tap="closeDeleteAccountPopup"></view>
+      <view class="lf-popup-content">
+        <view class="lf-popup-header">
+          <text class="lf-popup-title">确认注销账号</text>
+          <view class="lf-popup-close" @tap="closeDeleteAccountPopup"><uni-icons type="closeempty" size="18" :color="colorGrey" /></view>
         </view>
-        <view class="popup-body">
+        <view class="lf-popup-body">
           <view class="popup-message">注销账号后，您的所有数据将被删除且无法恢复。</view>
           <view class="form-item">
             <text class="form-label">请输入以下文字确认操作：</text>
@@ -58,9 +58,9 @@
             <input class="form-input" v-model="confirmInput" placeholder="请输入上方文字" />
           </view>
         </view>
-        <view class="popup-footer">
-          <button class="popup-btn cancel-btn" @tap="closeDeleteAccountPopup">取消</button>
-          <button class="popup-btn confirm-btn" @tap="confirmDeleteAccount">确认注销</button>
+        <view class="lf-popup-footer">
+          <button class="lf-btn-ghost lf-popup-btn" @tap="closeDeleteAccountPopup">取消</button>
+          <button class="lf-btn-danger lf-popup-btn" @tap="confirmDeleteAccount">确认注销</button>
         </view>
       </view>
     </view>
@@ -69,6 +69,7 @@
 
 <script>
 import { mapState } from 'vuex';
+import { COLOR_GREY } from '@/config/ui';
 
 /**
  * 用户反馈组件
@@ -77,6 +78,7 @@ import { mapState } from 'vuex';
 export default {
   data() {
     return {
+      colorGrey: COLOR_GREY, // 辅助图标灰（与 $uni-text-color-grey 同步）
       content: '', // 反馈内容
       feedbackList: [], // 反馈历史列表
       isLoading: false, // 加载状态
@@ -365,24 +367,23 @@ export default {
 };
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 /* 页面容器 */
 .feedback-container {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: $uni-bg-color-grey;
   display: flex;
   flex-direction: column;
-  padding-top: 30rpx;
-  padding-bottom: 30rpx;
+  padding: 24rpx 0 40rpx;
 }
 
-/* 表单容器 */
+/* 表单卡片 */
 .form-container {
-  padding: 30rpx;
-  background-color: #fff;
-  border-radius: 20rpx;
-  margin: 0 30rpx;
-  margin-bottom: 30rpx;
+  padding: 32rpx 28rpx;
+  background-color: $uni-bg-color;
+  border-radius: $uni-border-radius-card;
+  margin: 0 24rpx 24rpx;
+  box-shadow: $uni-shadow-card;
 }
 
 /* 表单项 */
@@ -393,9 +394,9 @@ export default {
 
 /* 表单标签 */
 .form-label {
-  font-size: 32rpx;
-  color: #333;
-  font-weight: bold;
+  font-size: $uni-font-size-md;
+  color: $uni-text-color;
+  font-weight: 600;
   margin-bottom: 20rpx;
   display: block;
 }
@@ -404,77 +405,106 @@ export default {
 .form-textarea {
   width: 100%;
   height: 300rpx;
-  background-color: #f9f9f9;
-  border-radius: 10rpx;
-  padding: 20rpx;
-  font-size: 28rpx;
-  color: #333;
+  background-color: $uni-bg-color-section;
+  border-radius: $uni-radius-md;
+  padding: 24rpx;
+  font-size: $uni-font-size-base;
+  color: $uni-text-color;
   box-sizing: border-box;
+  line-height: 1.6;
+  border: 2rpx solid transparent;
+  transition: border-color 0.15s, background-color 0.15s;
+
+  &:focus {
+    border-color: $uni-color-primary;
+    background-color: $uni-bg-color;
+  }
 }
 
 /* 字数计数器 */
 .textarea-counter {
   position: absolute;
-  right: 20rpx;
+  right: 24rpx;
   bottom: 20rpx;
-  font-size: 24rpx;
-  color: #999;
+  font-size: $uni-font-size-caption;
+  color: $uni-text-color-grey;
 }
 
 /* 提交按钮 */
 .submit-btn {
-  height: 90rpx;
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  color: #fff;
-  border-radius: 45rpx;
-  font-size: 32rpx;
+  height: 92rpx;
+  background-color: $uni-color-primary;
+  color: $uni-text-color-inverse;
+  border-radius: $uni-border-radius-btn;
+  font-size: $uni-font-size-lg;
+  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 60rpx;
+  margin-top: 20rpx;
+  box-shadow: $uni-shadow-btn;
+  border: none;
+
+  &::after {
+    border: none;
+  }
+
+  &:active {
+    background-color: $uni-color-primary-deep;
+    transform: scale(0.99);
+  }
 }
 
-/* 注销账号按钮 */
+/* 注销账号按钮（危险描边） */
 .delete-account-btn {
-  height: 90rpx;
-  background: #fff;
-  color: #ff3b30;
-  border: 1px solid #ff3b30;
-  border-radius: 45rpx;
-  font-size: 32rpx;
+  height: 92rpx;
+  background: $uni-bg-color;
+  color: $uni-color-error;
+  border: 2rpx solid rgba($uni-color-error, 0.4);
+  border-radius: $uni-border-radius-btn;
+  font-size: $uni-font-size-base;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 30rpx;
+  margin-top: 24rpx;
+
+  &::after {
+    border: none;
+  }
+
+  &:active {
+    background-color: $uni-color-error-soft;
+  }
 }
 
-/* 历史记录容器 */
+/* ===== 历史记录 ===== */
 .history-container {
-  margin: 0 30rpx;
-  background-color: #fff;
-  border-radius: 20rpx;
+  margin: 0 24rpx;
+  background-color: $uni-bg-color;
+  border-radius: $uni-border-radius-card;
   overflow: hidden;
+  box-shadow: $uni-shadow-card;
 }
 
-/* 历史记录标题 */
+/* 历史标题（区块头风格） */
 .history-title {
-  padding: 30rpx;
-  font-size: 32rpx;
-  color: #333;
-  font-weight: bold;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 28rpx 28rpx 20rpx;
+  font-size: $uni-font-size-md;
+  color: $uni-text-color;
+  font-weight: 600;
+  border-bottom: 1rpx solid $uni-border-color-split;
 }
 
 /* 历史记录列表 */
 .history-list {
-  padding: 0 30rpx;
+  padding: 0 28rpx;
 }
 
 /* 历史记录项 */
 .history-item {
-  padding: 30rpx 0;
-  border-bottom: 1px solid #f0f0f0;
-  
+  padding: 28rpx 0;
+  border-bottom: 1rpx solid $uni-border-color-split;
+
   &:last-child {
     border-bottom: none;
   }
@@ -482,185 +512,84 @@ export default {
 
 /* 反馈内容 */
 .history-content {
-  font-size: 28rpx;
-  color: #333;
-  line-height: 1.5;
-  margin-bottom: 15rpx;
+  font-size: $uni-font-size-base;
+  color: $uni-text-color;
+  line-height: 1.6;
+  margin-bottom: 14rpx;
   word-break: break-all;
 }
 
 /* 反馈时间 */
 .history-time {
-  font-size: 24rpx;
-  color: #999;
+  font-size: $uni-font-size-caption;
+  color: $uni-text-color-grey;
 }
 
-/* 空状态容器 */
+/* ===== 空/加载状态 ===== */
 .empty-container {
-  margin: 0 30rpx;
-  padding: 60rpx 0;
-  background-color: #fff;
-  border-radius: 20rpx;
+  margin: 0 24rpx;
+  padding: 80rpx 0;
+  background-color: $uni-bg-color;
+  border-radius: $uni-border-radius-card;
+  box-shadow: $uni-shadow-card;
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
-/* 空状态文本 */
 .empty-text {
-  font-size: 28rpx;
-  color: #999;
+  font-size: $uni-font-size-base;
+  color: $uni-text-color-grey;
 }
 
-/* 加载中容器 */
 .loading-container {
-  margin: 30rpx;
+  margin: 30rpx 24rpx;
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
-/* 加载中文本 */
 .loading-text {
-  font-size: 28rpx;
-  color: #999;
+  font-size: $uni-font-size-base;
+  color: $uni-text-color-grey;
 }
 
-/* 自定义弹窗 */
-.custom-popup {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* 弹窗遮罩 */
-.popup-mask {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.6);
-}
-
-/* 弹窗内容 */
-.popup-content {
-  width: 650rpx;
-  background-color: #fff;
-  border-radius: 20rpx;
-  overflow: hidden;
-  position: relative;
-  z-index: 1000;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
-  animation: popup-in 0.3s ease;
-}
-
-/* 弹窗动画 */
-@keyframes popup-in {
-  from {
-    transform: scale(0.8);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-/* 弹窗头部 */
-.popup-header {
-  padding: 30rpx;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #f5f5f5;
-}
-
-/* 弹窗标题 */
-.popup-title {
-  font-size: 36rpx;
-  font-weight: bold;
-  color: #333;
-}
-
-/* 关闭按钮 */
-.popup-close {
-  font-size: 48rpx;
-  color: #999;
-  line-height: 1;
-}
-
-/* 弹窗内容区 */
-.popup-body {
-  padding: 30rpx;
-}
-
-/* 弹窗消息 */
+/* ===== 弹窗内元素（弹窗外壳见 common.scss .lf-popup） ===== */
 .popup-message {
-  font-size: 30rpx;
-  color: #333;
-  margin-bottom: 30rpx;
-  line-height: 1.5;
+  font-size: $uni-font-size-base;
+  color: $uni-text-color;
+  margin-bottom: 28rpx;
+  line-height: 1.6;
 }
 
 /* 确认文本显示区 */
 .confirm-text-display {
-  background-color: #f9f9f9;
-  padding: 20rpx;
-  border-radius: 10rpx;
-  font-size: 30rpx;
-  color: #ff3b30;
-  font-weight: bold;
+  background-color: $uni-color-error-soft;
+  padding: 24rpx;
+  border-radius: $uni-radius-md;
+  font-size: $uni-font-size-md;
+  color: $uni-color-error;
+  font-weight: 600;
   margin-bottom: 20rpx;
   text-align: center;
-  border: 1px dashed #ff3b30;
+  border: 2rpx dashed rgba($uni-color-error, 0.45);
 }
 
-/* 表单输入框 */
+/* 弹窗输入框 */
 .form-input {
   width: 100%;
-  height: 90rpx;
-  border: 1px solid #e5e5e5;
-  border-radius: 10rpx;
-  padding: 0 20rpx;
-  font-size: 30rpx;
+  height: 88rpx;
+  border: 2rpx solid transparent;
+  border-radius: $uni-radius-md;
+  padding: 0 24rpx;
+  font-size: $uni-font-size-base;
   box-sizing: border-box;
-  background-color: #f9f9f9;
-}
+  background-color: $uni-bg-color-section;
+  transition: border-color 0.15s, background-color 0.15s;
 
-/* 弹窗底部 */
-.popup-footer {
-  padding: 20rpx 30rpx 40rpx;
-  display: flex;
-  justify-content: space-between;
+  &:focus {
+    border-color: $uni-color-primary;
+    background-color: $uni-bg-color;
+  }
 }
-
-/* 弹窗按钮 */
-.popup-btn {
-  width: 45%;
-  height: 90rpx;
-  border-radius: 45rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32rpx;
-}
-
-/* 取消按钮 */
-.cancel-btn {
-  background-color: #f5f5f5;
-  color: #666;
-}
-
-/* 确认按钮 */
-.confirm-btn {
-  background: linear-gradient(to right, #FF3B30, #FF9500);
-  color: #fff;
-}
-</style> 
+</style>

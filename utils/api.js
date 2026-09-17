@@ -1,4 +1,45 @@
 import { BASE_URL } from '@/config';
+import { forceLogout as unifiedForceLogout } from './auth';
+
+/**
+ * 静默刷新 access token（单例，避免并发刷新）。
+ * 只负责换发并保存新 token，不做过期跳转——由 request() 统一处理，避免重复弹窗/重复 reLaunch。
+ */
+let refreshTokenPromise = null;
+const refreshOnce = () => {
+  if (refreshTokenPromise) return refreshTokenPromise;
+  const refreshToken = uni.getStorageSync('refreshToken');
+  if (!refreshToken) return Promise.reject('没有刷新令牌');
+  refreshTokenPromise = new Promise((resolve, reject) => {
+    uni.request({
+      url: BASE_URL + '/common/refresh',
+      method: 'POST',
+      header: {
+        'Authorization': 'Bearer ' + refreshToken,
+        'Content-Type': 'application/json'
+      },
+      success: (res) => {
+        if (res.statusCode >= 200 && res.statusCode < 300 && res.data && res.data.access_token) {
+          uni.setStorageSync('token', res.data.access_token);
+          if (res.data.refresh_token) {
+            uni.setStorageSync('refreshToken', res.data.refresh_token);
+          }
+          resolve(res.data);
+        } else {
+          reject(res);
+        }
+      },
+      fail: reject
+    });
+  });
+  // .finally 的返回值必须赋回单例变量（参照 request.js 的 refreshTokenSingleton 写法）：
+  // 原写法 `refreshTokenPromise.finally(...)` 的返回值被丢弃，刷新失败时该链上
+  // 的 rejection 无人处理，产生 unhandled rejection
+  refreshTokenPromise = refreshTokenPromise.finally(() => { refreshTokenPromise = null; });
+  return refreshTokenPromise;
+  // TODO: 本模块的 refreshOnce 与 utils/request.js 的 refreshTokenSingleton 是两套互不感知的
+  // 刷新单例，统一入口需改动两个模块的所有调用方，暂留待后续重构
+};
 
 /**
  * 统一请求方法
@@ -8,9 +49,10 @@ import { BASE_URL } from '@/config';
  * @param {string} options.method 请求方法
  * @param {Object} [options.data] 请求数据
  * @param {Object} [options.header] 自定义请求头
+ * @param {number} [_retryCount=0] 401/422 刷新重试次数（内部参数，最多重试1次）
  * @returns {Promise} 请求结果Promise
  */
-const request = (options) => {
+const request = (options, _retryCount = 0) => {
   return new Promise((resolve, reject) => {
     // 获取token
     const token = uni.getStorageSync('token');
@@ -37,33 +79,28 @@ const request = (options) => {
         // 请求成功
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(res.data);
-        } else if (res.statusCode === 401) {
-          // 未授权：清除全部登录凭证（与 utils/request.js 的 handleUnauthorized 保持一致）
-          uni.removeStorageSync('token');
-          uni.removeStorageSync('refreshToken');
-          uni.removeStorageSync('userInfo');
+        } else if ((res.statusCode === 401 || res.statusCode === 422) &&
+                   !['/user/login', '/user/register', '/common/refresh'].some(path => options.url.includes(path))) {
+          // 令牌无效：flask-jwt 对过期/无效 token 返回 401/422（后端业务从不主动返回 422）。
+          // 先静默刷新并重试一次；刷新失败或重试仍失败，才清除凭证并跳转登录页
+          // 登出副作用统一收敛到 utils/auth.js 的 forceLogout：
+          // 清凭证 + 关 Socket.IO 长连接 + 重置 Vuex 登录态 + 跳转登录页
+          const forceLogout = unifiedForceLogout;
 
+          if (_retryCount < 1) {
+            refreshOnce().then(() => {
+              request(options, _retryCount + 1).then(resolve).catch(reject);
+            }).catch(() => {
+              forceLogout();
+              reject(res.data);
+            });
+          } else {
+            forceLogout();
+            reject(res.data);
+          }
+        } else if (res.statusCode === 401) {
           // 登录/注册/刷新接口本身返回 401 属于业务失败（如密码错误），
           // 不做"登录已过期"提示与跳转，由调用方展示错误
-          const isAuthFreeRequest = ['/user/login', '/user/register', '/common/refresh']
-            .some(path => options.url.includes(path));
-
-          if (!isAuthFreeRequest) {
-            uni.showToast({
-              title: '登录已过期，请重新登录',
-              icon: 'none'
-            });
-            setTimeout(() => {
-              // reLaunch 避免登录页反复入栈
-              const pages = getCurrentPages();
-              const current = pages[pages.length - 1];
-              if (!current || current.route !== 'pages/login/login') {
-                uni.reLaunch({
-                  url: '/pages/login/login'
-                });
-              }
-            }, 1500);
-          }
           reject(res.data);
         } else if (res.statusCode === 403) {
           // 权限不足
@@ -403,12 +440,39 @@ const api = {
     
     /**
      * 获取我的失物列表
+     * @param {Object} [params] 分页参数 { page, size }（后端 paginate_query 接受 page/size）
      * @returns {Promise} 我的失物列表
      */
-    getMyList: () => {
+    getMyList: (params) => {
       return request({
         url: '/user/lost-items',
+        method: 'GET',
+        data: params
+      });
+    },
+
+    /**
+     * 获取我的失物详情（含审核中的记录；非本人发布时后端回落到公开已审核数据）
+     * @param {string|number} id 失物ID
+     * @returns {Promise} 失物详情
+     */
+    getMyDetail: (id) => {
+      return request({
+        url: `/user/lost-items/${id}/detail`,
         method: 'GET'
+      });
+    },
+
+    /**
+     * 识别图片标签（自动分类；后端需登录态）
+     * @param {string} imageUrl 图片URL
+     * @returns {Promise} 识别结果
+     */
+    recognizeLabels: (imageUrl) => {
+      return request({
+        url: '/common/images/labels',
+        method: 'POST',
+        data: { image_url: imageUrl }
       });
     }
   },
@@ -496,11 +560,25 @@ const api = {
     
     /**
      * 获取我的招领列表
+     * @param {Object} [params] 分页参数 { page, size }（后端 paginate_query 接受 page/size）
      * @returns {Promise} 我的招领列表
      */
-    getMyList: () => {
+    getMyList: (params) => {
       return request({
         url: '/user/found-items',
+        method: 'GET',
+        data: params
+      });
+    },
+
+    /**
+     * 获取我的招领详情（含审核中的记录；非本人发布时后端回落到公开已审核数据）
+     * @param {string|number} id 招领ID
+     * @returns {Promise} 招领详情
+     */
+    getMyDetail: (id) => {
+      return request({
+        url: `/user/found-items/${id}/detail`,
         method: 'GET'
       });
     }
@@ -568,7 +646,7 @@ const api = {
      */
     markAsRead: (messageId) => {
       return request({
-        url: `/user/read/${messageId}`,
+        url: `/user/chat/mark/${messageId}`,
         method: 'POST'
       });
     },

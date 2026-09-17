@@ -3,7 +3,7 @@
 		<!-- 搜索栏 -->
 		<view class="search-bar">
 			<view class="search-input-box">
-				<uni-icons type="search" size="18" color="#999"></uni-icons>
+				<uni-icons type="search" size="18" :color="colorGrey"></uni-icons>
 				<input 
 					class="search-input" 
 					type="text" 
@@ -12,7 +12,7 @@
 					confirm-type="search"
 					@confirm="handleSearch"
 				/>
-				<uni-icons v-if="searchKeyword" type="clear" size="18" color="#999" @click="clearSearch"></uni-icons>
+				<uni-icons v-if="searchKeyword" type="clear" size="18" :color="colorGrey" @click="clearSearch"></uni-icons>
 				<view class="search-btn" @tap="handleSearch">搜索</view>
 			</view>
 		</view>
@@ -22,15 +22,21 @@
 			<swiper-item v-for="(item, index) in limitedCarouselImages" :key="index">
 				<image :src="item.image_url" mode="aspectFill" class="banner-image"></image>
 			</swiper-item>
-			<!-- 默认轮播图 -->
+			<!-- 无轮播图时的品牌占位卡（替代 logo 拉伸） -->
 			<swiper-item v-if="limitedCarouselImages.length === 0">
-				<image src="/static/logo.png" mode="aspectFill" class="banner-image"></image>
+				<view class="banner-placeholder">
+					<view class="banner-placeholder-info">
+						<text class="banner-title">校园失物招领</text>
+						<text class="banner-sub">拾获一份善意 · 归还一份温暖</text>
+					</view>
+					<image class="banner-logo" src="/static/logo.png" mode="aspectFit"></image>
+				</view>
 			</swiper-item>
 		</swiper>
 		
 		<!-- 公告栏 -->
 		<view class="notice-bar">
-			<uni-icons type="notification-filled" size="18" color="#FF9500"></uni-icons>
+			<uni-icons type="notification-filled" size="18" :color="colorWarning"></uni-icons>
 			<swiper class="notice-swiper" vertical autoplay circular :interval="3000" :duration="500">
 				<swiper-item v-for="(item, index) in announcements" :key="index">
 					<view class="notice-item" @tap="viewAnnouncementDetail(item)">
@@ -55,11 +61,12 @@
 			<view class="notice-more-btn" @tap="clearSearch">重置</view>
 		</view>
 		
-		<!-- 高级筛选面板 -->
-		<view class="filter-panel" v-if="showFilterPanel">
+		<!-- 高级筛选面板（遮罩 + 右侧滑入） -->
+		<view class="filter-mask" v-if="showFilterPanel" @tap="toggleFilterPanel"></view>
+		<view class="filter-panel" :class="{ open: showFilterPanel }">
 			<view class="filter-header">
 				<text class="filter-title">高级筛选</text>
-				<uni-icons type="close" size="20" color="#666" @click="toggleFilterPanel"></uni-icons>
+				<view class="filter-close" @tap="toggleFilterPanel"><uni-icons type="closeempty" size="18" :color="colorGrey"></uni-icons></view>
 			</view>
 			
 			<scroll-view scroll-y class="filter-scroll">
@@ -203,154 +210,147 @@
 				:key="index"
 				@tap="selectCategory(item.value)"
 			>
-				<view class="category-icon" :class="{ 'active': selectedCategory === item.value }" :style="{ backgroundColor: item.color }">
-					<text class="icon-text">{{ item.icon }}</text>
-				</view>
+				<lf-icon-item
+					class="category-icon"
+					:class="{ 'category-icon-active': selectedCategory === item.value }"
+					:icon="item.glyph"
+					:color="item.color"
+					:size="80"
+					:icon-size="34"
+				/>
 				<text class="category-name" :class="{ 'active': selectedCategory === item.value }">{{ item.label }}</text>
 			</view>
 		</view>
 		
-		<!-- 切换标签 -->
+		<!-- 切换标签：失物/招领分段控件 + 筛选/排序图标按钮 -->
 		<view class="tabs">
-			<view 
-				class="tab-item" 
-				:class="{ active: activeTab === 'lost' }"
-				@tap="switchTab('lost')"
-			>
-				<uni-icons type="paperplane" size="18" :color="activeTab === 'lost' ? '#007AFF' : '#666'" style="margin-right: 4rpx;"></uni-icons>
-				失物信息
+			<view class="lf-segment tabs-segment">
+				<view class="lf-segment-item" :class="{ active: activeTab === 'lost' }" @tap="switchTab('lost')">失物信息</view>
+				<view class="lf-segment-item" :class="{ active: activeTab === 'found' }" @tap="switchTab('found')">招领信息</view>
 			</view>
-			<view 
-				class="tab-item"
-				@tap="toggleFilterPanel"
-			>
-				<uni-icons type="settings" size="18" color="#666" style="margin-right: 4rpx;"></uni-icons>
-				筛选
-			</view>
-			<view 
-				class="tab-item"
-				@tap="toggleSortOrder"
-			>
-				<uni-icons :type="sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'" size="18" color="#666" style="margin-right: 4rpx;"></uni-icons>
-				{{ sortOrderText }}
-			</view>
-			<view 
-				class="tab-item" 
-				:class="{ active: activeTab === 'found' }"
-				@tap="switchTab('found')"
-			>
-				<uni-icons type="paperplane-filled" size="18" :color="activeTab === 'found' ? '#007AFF' : '#666'" style="margin-right: 4rpx;"></uni-icons>
-				招领信息
+			<view class="tabs-actions">
+				<view class="tab-action" :class="{ active: isAdvancedFilterActive || showFilterPanel }" @tap="toggleFilterPanel">
+					<uni-icons type="settings" size="20" :color="(isAdvancedFilterActive || showFilterPanel) ? colorPrimary : colorGrey"></uni-icons>
+				</view>
+				<view class="tab-action" @tap="toggleSortOrder">
+					<uni-icons :type="sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'" size="20" :color="colorGrey"></uni-icons>
+				</view>
 			</view>
 		</view>
 		
 		<!-- 列表内容 -->
 		<scroll-view 
-			class="item-list" 
+			class="item-list lf-card-list" 
 			scroll-y 
 			@scrolltolower="loadMore"
 			refresher-enabled
 			:refresher-triggered="isRefreshing"
 			@refresherrefresh="onRefresh"
 		>
+			<!-- 首屏骨架屏：数据返回前占位（呼吸动画样式见 common.scss .skeleton-block） -->
+				<view class="item-grid" v-if="!firstLoaded">
+					<view class="item-card skeleton-card" v-for="i in 4" :key="'skeleton-' + i">
+						<view class="skeleton-block skeleton-image"></view>
+						<view class="item-info">
+							<view class="skeleton-block skeleton-line-name"></view>
+							<view class="skeleton-block skeleton-line-tag"></view>
+							<view class="skeleton-block skeleton-line-desc"></view>
+							<view class="skeleton-block skeleton-line-meta"></view>
+						</view>
+					</view>
+				</view>
+
 			<!-- 筛选结果提示 -->
 			<view class="filter-result-tip" v-if="isAdvancedFilterActive">
 				<text class="filter-result-text">筛选结果</text>
 				<view class="filter-result-reset" @tap="clearSearch">清除筛选</view>
 			</view>
 			
-			<!-- 失物列表 -->
-			<block v-if="activeTab === 'lost' && !isAdvancedFilterActive && filteredLostItems.length > 0">
-				<view
-					class="item-card"
-					v-for="item in filteredLostItems"
-					:key="item.id"
-					@tap="goToDetail('lost', item.id)"
-				>
-					<image class="item-image" :src="item.image_url" mode="aspectFill"></image>
+			<view class="item-grid" v-if="firstLoaded && activeTab === 'lost' && !isAdvancedFilterActive && filteredLostItems.length > 0">
+				<view class="item-card" v-for="item in filteredLostItems" :key="item.id" @tap="goToDetail('lost', item.id)">
+					<image v-if="item.image_url" class="item-image" :src="item.image_url" mode="aspectFill"></image>
+					<view v-else class="item-image item-image-placeholder" :style="{ backgroundColor: categoryColor(item.category) }">
+						<text class="placeholder-text">{{ item.category || '未分类' }}</text>
+					</view>
 					<view class="item-info">
-						<view class="item-header">
+						<view class="item-name-row">
 							<text class="item-name">{{ item.name }}</text>
-							<view class="item-tags">
-								<text class="item-status" :class="{ 'completed': item.is_completed }">{{ item.is_completed ? '已找到' : '寻找中' }}</text>
-								<text class="item-category">{{ item.category }}</text>
-							</view>
+							<text class="item-time">{{ $utils.relativeTime(item.lost_time) }}</text>
+						</view>
+						<view class="item-tags">
+							<lf-status-tag :status="item.is_completed ? 'completed' : 'open'" :label="item.is_completed ? '已找到' : '寻找中'" />
+							<text class="item-category">{{ item.category }}</text>
 						</view>
 						<text class="item-desc">{{ item.description }}</text>
 						<view class="item-footer">
-							<text class="item-location">{{ item.location }}</text>
-							<text class="item-time">{{ $utils.formatDate(item.lost_time, 'YYYY-MM-DD') }} {{ $utils.relativeTime(item.lost_time) }}</text>
+							<uni-icons class="location-icon" type="location-filled" size="12" :color="colorPrimary"></uni-icons>
+							<text class="item-location">{{ item.location || '未填写地点' }}</text>
 						</view>
 					</view>
 				</view>
-			</block>
-			
-			<!-- 招领列表 -->
-			<block v-if="activeTab === 'found' && !isAdvancedFilterActive && filteredFoundItems.length > 0">
-				<view
-					class="item-card"
-					v-for="item in filteredFoundItems"
-					:key="item.id"
-					@tap="goToDetail('found', item.id)"
-				>
-					<image class="item-image" :src="item.image_url" mode="aspectFill"></image>
-					<view class="item-info">
-						<view class="item-header">
-							<text class="item-name">{{ item.name }}</text>
-							<view class="item-tags">
-								<text class="item-status" :class="{ 'completed': item.is_completed }">{{ item.is_completed ? '已归还' : '招领中' }}</text>
-								<text class="item-category">{{ item.category }}</text>
-							</view>
-						</view>
-						<text class="item-desc">{{ item.description }}</text>
-						<view class="item-footer">
-							<text class="item-location">{{ item.location }}</text>
-							<text class="item-time">{{ $utils.formatDate(item.found_time, 'YYYY-MM-DD') }} {{ $utils.relativeTime(item.found_time) }}</text>
-						</view>
-					</view>
-				</view>
-			</block>
-			
-			<!-- 筛选结果列表 -->
-			<block v-if="isAdvancedFilterActive && filteredItems.length > 0">
-				<view
-					class="item-card"
-					v-for="item in filteredItems"
-					:key="item.id"
-					@tap="goToDetail(item.item_type || (filterType === 'lost' ? 'lost' : 'found'), item.id)"
-				>
-					<image class="item-image" :src="item.image_url" mode="aspectFill"></image>
-					<view class="item-info">
-						<view class="item-header">
-							<text class="item-name">{{ item.name }}</text>
-							<view class="item-tags">
-								<text class="item-status" :class="{ 'completed': item.is_completed }">{{ item.is_completed ? (item.item_type === 'found' || filterType === 'found' ? '已归还' : '已找到') : (item.item_type === 'found' || filterType === 'found' ? '招领中' : '寻找中') }}</text>
-								<text class="item-category">{{ item.category }}</text>
-								<text class="item-type" :class="item.item_type || filterType">{{ (item.item_type === 'found' || filterType === 'found') ? '招领' : '失物' }}</text>
-							</view>
-						</view>
-						<text class="item-desc">{{ item.description }}</text>
-						<view class="item-footer">
-							<text class="item-location">{{ item.location }}</text>
-							<text class="item-time">{{ $utils.formatDate(item.item_type === 'found' || filterType === 'found' ? item.found_time : item.lost_time, 'YYYY-MM-DD') }} {{ $utils.relativeTime(item.item_type === 'found' || filterType === 'found' ? item.found_time : item.lost_time) }}</text>
-						</view>
-					</view>
-				</view>
-			</block>
-			
-			<!-- 加载更多 -->
-			<view class="loading-more" v-if="hasMore">
-				<text class="loading-text">加载中...</text>
 			</view>
-			<view class="loading-more" v-else>
-				<text class="loading-text">没有更多数据了</text>
+
+			<!-- 招领列表（双列卡片） -->
+			<view class="item-grid" v-if="firstLoaded && activeTab === 'found' && !isAdvancedFilterActive && filteredFoundItems.length > 0">
+				<view class="item-card" v-for="item in filteredFoundItems" :key="item.id" @tap="goToDetail('found', item.id)">
+					<image v-if="item.image_url" class="item-image" :src="item.image_url" mode="aspectFill"></image>
+					<view v-else class="item-image item-image-placeholder" :style="{ backgroundColor: categoryColor(item.category) }">
+						<text class="placeholder-text">{{ item.category || '未分类' }}</text>
+					</view>
+					<view class="item-info">
+						<view class="item-name-row">
+							<text class="item-name">{{ item.name }}</text>
+							<text class="item-time">{{ $utils.relativeTime(item.found_time) }}</text>
+						</view>
+						<view class="item-tags">
+							<lf-status-tag :status="item.is_completed ? 'completed' : 'open'" :label="item.is_completed ? '已归还' : '招领中'" />
+							<text class="item-category">{{ item.category }}</text>
+						</view>
+						<text class="item-desc">{{ item.description }}</text>
+						<view class="item-footer">
+							<uni-icons class="location-icon" type="location-filled" size="12" :color="colorPrimary"></uni-icons>
+							<text class="item-location">{{ item.location || '未填写地点' }}</text>
+						</view>
+					</view>
+				</view>
 			</view>
-			
+
+			<!-- 筛选结果列表（双列卡片） -->
+			<view class="item-grid" v-if="firstLoaded && isAdvancedFilterActive && filteredItems.length > 0">
+				<view class="item-card" v-for="item in filteredItems" :key="item.id" @tap="goToDetail(item.item_type || (filterType === 'lost' ? 'lost' : 'found'), item.id)">
+					<image v-if="item.image_url" class="item-image" :src="item.image_url" mode="aspectFill"></image>
+					<view v-else class="item-image item-image-placeholder" :style="{ backgroundColor: categoryColor(item.category) }">
+						<text class="placeholder-text">{{ item.category || '未分类' }}</text>
+					</view>
+					<view class="item-info">
+						<view class="item-name-row">
+							<text class="item-name">{{ item.name }}</text>
+							<text class="item-time">{{ $utils.relativeTime((item.item_type === 'found' || filterType === 'found') ? item.found_time : item.lost_time) }}</text>
+						</view>
+						<view class="item-tags">
+							<lf-status-tag :status="item.is_completed ? 'completed' : 'open'" :label="item.is_completed ? (item.item_type === 'found' || filterType === 'found' ? '已归还' : '已找到') : (item.item_type === 'found' || filterType === 'found' ? '招领中' : '寻找中')" />
+							<text class="item-category">{{ item.category }}</text>
+							<lf-status-tag :status="(item.item_type === 'found' || filterType === 'found') ? 'found' : 'lost'" :label="(item.item_type === 'found' || filterType === 'found') ? '招领' : '失物'" />
+						</view>
+						<text class="item-desc">{{ item.description }}</text>
+						<view class="item-footer">
+							<uni-icons class="location-icon" type="location-filled" size="12" :color="colorPrimary"></uni-icons>
+							<text class="item-location">{{ item.location || '未填写地点' }}</text>
+						</view>
+					</view>
+				</view>
+			</view>
+
+			<!-- 触底加载提示（列表非空才显示，避免与空态同屏） -->
+			<lf-load-more v-if="firstLoaded && !isEmptyList" :loading="isLoadingMore" :finished="!hasMore" />
+
+
 			<!-- 空状态 -->
-			<view class="empty-state" v-if="(activeTab === 'lost' && !isAdvancedFilterActive && filteredLostItems.length === 0) || (activeTab === 'found' && !isAdvancedFilterActive && filteredFoundItems.length === 0) || (isAdvancedFilterActive && filteredItems.length === 0)">
-				<image class="empty-image" src="/static/logo.png" mode="aspectFit"></image>
-				<text class="empty-text">暂无数据</text>
-			</view>
+			<lf-empty
+				v-if="firstLoaded && isEmptyList"
+				:type="(searchKeyword || isAdvancedFilterActive || selectedCategory) ? 'search' : 'items'"
+				:text="(searchKeyword || isAdvancedFilterActive || selectedCategory) ? '没有找到相关物品' : '暂无物品'"
+			/>
 		</scroll-view>
 		
 
@@ -360,6 +360,7 @@
 <script>
 import { mapState, mapActions } from 'vuex';
 import { checkLogin, goToLogin } from '../../utils/common';
+import { COLOR_PRIMARY, COLOR_GREY, COLOR_SUCCESS, COLOR_WARNING, COLOR_ERROR, COLOR_PURPLE, COLOR_PINK, COLOR_GOLD, COLOR_SLATE } from '@/config/ui';
 import uniIcons from '@dcloudio/uni-ui/lib/uni-icons/uni-icons.vue';
 import uniDatetimePicker from '@dcloudio/uni-ui/lib/uni-datetime-picker/uni-datetime-picker.vue';
 
@@ -370,6 +371,9 @@ export default {
 	},
 	data() {
 		return {
+			colorPrimary: COLOR_PRIMARY, // 主色（uni-icons 激活色，与 token 同步）
+			colorGrey: COLOR_GREY, // 未激活图标色
+			colorWarning: COLOR_WARNING, // 公告铃铛色
 			activeTab: 'lost', // 当前激活的标签：lost-失物，found-招领
 			searchKeyword: '', // 搜索关键词
 			selectedCategory: '', // 选中的分类
@@ -378,6 +382,7 @@ export default {
 			hasMore: true, // 是否有更多数据
 			isRefreshing: false, // 是否正在刷新
 			isLoadingMore: false, // 是否正在加载更多（防触底重入）
+			firstLoaded: false, // 首屏数据是否已加载完成（未完成时列表区显示骨架屏）
 			appliedFilterParams: null, // 高级筛选"应用"时的参数快照（翻页复用，避免面板中途修改导致两页条件不一致）
 			appliedFilterType: null, // 高级筛选"应用"时的类型快照（lost/found）
 			announcements: [], // 公告列表
@@ -394,14 +399,14 @@ export default {
 			filteredItems: [], // 筛选结果列表
 			sortOrder: 'desc', // 排序方式：desc-倒序（最新在前），asc-正序（最早在前）
 			categories: [
-				{ value: '电子产品', label: '电子产品', icon: '电', color: '#FF9500' },
-				{ value: '证件', label: '证件', icon: '证', color: '#007AFF' },
-				{ value: '钱包', label: '钱包', icon: '钱', color: '#4CD964' },
-				{ value: '钥匙', label: '钥匙', icon: '钥', color: '#FF3B30' },
-				{ value: '书籍', label: '书籍', icon: '书', color: '#5856D6' },
-				{ value: '衣物', label: '衣物', icon: '衣', color: '#FF2D55' },
-				{ value: '饰品', label: '饰品', icon: '饰', color: '#E0A800' },
-				{ value: '', label: '全部', icon: '全', color: '#8E8E93' }
+				{ value: '电子产品', label: '电子产品', glyph: 'gear', color: COLOR_WARNING },
+				{ value: '证件', label: '证件', glyph: 'staff', color: COLOR_PRIMARY },
+				{ value: '钱包', label: '钱包', glyph: 'wallet', color: COLOR_SUCCESS },
+				{ value: '钥匙', label: '钥匙', glyph: 'locked', color: COLOR_ERROR },
+				{ value: '书籍', label: '书籍', glyph: 'list', color: COLOR_PURPLE },
+				{ value: '衣物', label: '衣物', glyph: 'cart', color: COLOR_PINK },
+				{ value: '饰品', label: '饰品', glyph: 'star', color: COLOR_GOLD },
+				{ value: '', label: '全部', glyph: 'bars', color: COLOR_SLATE }
 			]
 		};
 	},
@@ -417,10 +422,11 @@ export default {
 		limitedCarouselImages() {
 			return this.carouselImages.slice(0, 5);
 		},
-		
-		// 排序文本
-		sortOrderText() {
-			return this.sortOrder === 'desc' ? '最新' : '最早';
+
+		// 当前视图列表是否为空（决定空态展示）
+		isEmptyList() {
+			if (this.isAdvancedFilterActive) return this.filteredItems.length === 0;
+			return this.activeTab === 'lost' ? this.filteredLostItems.length === 0 : this.filteredFoundItems.length === 0;
 		},
 		
 		// 过滤后的失物列表
@@ -578,14 +584,20 @@ export default {
 		
 		// 加载数据
 		async loadData() {
-			uni.showLoading({
-				title: '加载中...'
-			});
+			// 首屏加载用列表区骨架屏占位，不弹 loading 弹窗（避免闪烁叠加）；
+			// 二次加载（下拉刷新/切分类）仍用弹窗提示
+			const first = !this.firstLoaded;
+			if (!first) {
+				uni.showLoading({
+					title: '加载中...'
+				});
+			}
 			
 			// 添加超时处理
 			const timeout = setTimeout(() => {
-				uni.hideLoading();
+				if (!first) uni.hideLoading();
 				this.isRefreshing = false;
+				this.firstLoaded = true;
 				uni.showToast({
 					title: '加载超时，请检查网络',
 					icon: 'none'
@@ -605,14 +617,16 @@ export default {
 				]);
 				
 				clearTimeout(timeout); // 清除超时
-				uni.hideLoading();
+				if (!first) uni.hideLoading();
 			} catch (error) {
 				clearTimeout(timeout); // 清除超时
-				uni.hideLoading();
+				if (!first) uni.hideLoading();
 				uni.showToast({
 					title: '加载失败，请稍后再试',
 					icon: 'none'
 				});
+			} finally {
+				this.firstLoaded = true;
 			}
 		},
 		
@@ -910,6 +924,12 @@ export default {
 			}
 		},
 		
+		// 无图物品的分类色块：与分类导航同源取色，未知分类（AI 自定义等）回退主色
+		categoryColor(category) {
+			const hit = this.categories.find((c) => c.value === category);
+			return (hit && hit.color) || COLOR_PRIMARY;
+		},
+
 		// 跳转到详情页
 		goToDetail(type, id) {
 			// 检查登录状态
@@ -934,31 +954,7 @@ export default {
 				url: `/pages/detail/detail?type=${type}&id=${id}`
 			});
 		},
-		
-		// 跳转到发布页
-		goToPublish() {
-			// 检查登录状态，未登录则先跳转到登录页
-			if (!checkLogin()) {
-				uni.showModal({
-					title: '提示',
-					content: '发布信息需要先登录，是否前往登录？',
-					confirmText: '去登录',
-					success: (res) => {
-						if (res.confirm) {
-							uni.navigateTo({
-								url: '/pages/login/login'
-							});
-						}
-					}
-				});
-				return;
-			}
-			
-			uni.navigateTo({
-				url: '/pages/publish/publish'
-			});
-		},
-		
+
 		// 清除搜索
 		async clearSearch() {
 			// 如果搜索关键词为空，则不执行任何操作
@@ -1214,81 +1210,131 @@ export default {
 };
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 .index-container {
 	min-height: 100vh;
-	background-color: #f8f8f8;
+	background-color: $uni-bg-color-grey;
 	position: relative;
 }
 
+/* ===== 搜索栏（吸顶） ===== */
 .search-bar {
-	padding: 20rpx 30rpx;
-	background-color: #fff;
+	position: sticky;
+	top: 0;
+	z-index: 90;
+	padding: 20rpx $uni-spacing-page;
+	background-color: $uni-bg-color;
+	box-shadow: 0 2rpx 12rpx rgba(31, 41, 55, 0.04);
 }
 
 .search-input-box {
-	height: 70rpx;
-	background-color: #f2f2f2;
-	border-radius: 35rpx;
+	height: 76rpx;
+	background-color: $uni-bg-color-section;
+	border-radius: 38rpx;
 	display: flex;
 	align-items: center;
-	padding: 0 30rpx;
-}
-
-.search-icon-img {
-	width: 32rpx;
-	height: 32rpx;
-	margin-right: 10rpx;
+	padding: 0 12rpx 0 28rpx;
 }
 
 .search-input {
 	flex: 1;
-	height: 70rpx;
-	font-size: 28rpx;
+	height: 76rpx;
+	font-size: $uni-font-size-base;
+	min-width: 0;
 }
 
 .search-btn {
-	font-size: 28rpx;
-	color: #fff;
-	background-color: #007AFF;
-	padding: 0 20rpx;
-	height: 50rpx;
-	line-height: 50rpx;
-	border-radius: 25rpx;
-	margin-left: 10rpx;
+	font-size: $uni-font-size-base;
+	color: $uni-text-color-inverse;
+	background-color: $uni-color-primary;
+	padding: 0 30rpx;
+	height: 56rpx;
+	line-height: 56rpx;
+	border-radius: 28rpx;
+	margin-left: 12rpx;
 	text-align: center;
 	font-weight: 500;
+	flex-shrink: 0;
+
+	&:active {
+		background-color: $uni-color-primary-deep;
+	}
 }
 
+/* ===== 轮播图 ===== */
 .banner {
 	height: 300rpx;
-	width: 100%;
+	width: calc(100% - #{$uni-spacing-page} * 2);
+	margin: $uni-spacing-gap auto 0;
+	border-radius: $uni-radius-lg;
+	overflow: hidden;
+	box-shadow: $uni-shadow-card;
 }
 
 .banner-image {
 	width: 100%;
 	height: 100%;
-	border-radius: 0;
-	overflow: hidden;
 }
 
+/* 无轮播图时的品牌占位卡 */
+.banner-placeholder {
+	width: 100%;
+	height: 100%;
+	background: $uni-gradient-hero;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 44rpx;
+	box-sizing: border-box;
+}
+
+.banner-placeholder-info {
+	display: flex;
+	flex-direction: column;
+}
+
+.banner-title {
+	font-size: 40rpx;
+	font-weight: 600;
+	color: $uni-text-color-inverse;
+	letter-spacing: 2rpx;
+}
+
+.banner-sub {
+	font-size: $uni-font-size-caption;
+	color: rgba(255, 255, 255, 0.75);
+	margin-top: 14rpx;
+}
+
+.banner-logo {
+	width: 140rpx;
+	height: 140rpx;
+	border-radius: 32rpx;
+	background-color: rgba(255, 255, 255, 0.92);
+	padding: 12rpx;
+	box-sizing: content-box;
+}
+
+/* ===== 公告栏 ===== */
 .notice-bar {
 	display: flex;
 	align-items: center;
-	background-color: #fff;
-	padding: 15rpx 30rpx;
-	margin-top: 20rpx;
-	border-radius: 20rpx;
-	width: calc(100% - 20rpx);
+	background-color: $uni-bg-color;
+	padding: 20rpx $uni-spacing-card;
+	margin-top: $uni-spacing-gap;
+	border-radius: $uni-border-radius-card;
+	width: calc(100% - #{$uni-spacing-page} * 2);
 	box-sizing: border-box;
 	margin-left: auto;
 	margin-right: auto;
+	box-shadow: $uni-shadow-card;
 }
 
 .notice-swiper {
 	flex: 1;
 	height: 60rpx;
 	margin: 0 20rpx;
+	min-width: 0;
 }
 
 .notice-item {
@@ -1298,8 +1344,8 @@ export default {
 }
 
 .notice-text {
-	font-size: 26rpx;
-	color: #333;
+	font-size: $uni-font-size-sm;
+	color: $uni-text-color;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -1307,59 +1353,66 @@ export default {
 }
 
 .notice-new {
-	font-size: 20rpx;
-	color: #fff;
-	background-color: #FF3B30;
-	padding: 2rpx 8rpx;
-	border-radius: 10rpx;
-	margin-left: 10rpx;
-}
-
-.notice-more {
-	font-size: 24rpx;
-	color: #007AFF;
-	padding: 0 10rpx;
+	font-size: $uni-font-size-caption;
+	color: $uni-color-error;
+	background-color: $uni-color-error-soft;
+	padding: 2rpx 12rpx;
+	border-radius: $uni-radius-xs;
+	margin-left: 12rpx;
+	flex-shrink: 0;
 }
 
 .notice-more-btn {
-	font-size: 24rpx;
-	color: #ffffff;
-	background-color: #007AFF;
-	padding: 6rpx 16rpx;
-	border-radius: 20rpx;
+	font-size: $uni-font-size-caption;
+	color: $uni-color-primary;
+	background-color: $uni-color-primary-soft;
+	padding: 8rpx 22rpx;
+	border-radius: 24rpx;
 	text-align: center;
+	flex-shrink: 0;
+
+	&:active {
+		opacity: 0.7;
+	}
 }
 
+/* ===== 搜索状态提示 ===== */
 .search-status {
 	display: flex;
 	align-items: center;
-	background-color: #fff;
-	padding: 15rpx 30rpx;
-	margin-top: 20rpx;
-	border-radius: 20rpx;
-	width: calc(100% - 20rpx);
+	justify-content: space-between;
+	background-color: $uni-bg-color;
+	padding: 20rpx $uni-spacing-card;
+	margin-top: $uni-spacing-gap;
+	border-radius: $uni-border-radius-card;
+	width: calc(100% - #{$uni-spacing-page} * 2);
 	box-sizing: border-box;
 	margin-left: auto;
 	margin-right: auto;
+	box-shadow: $uni-shadow-card;
 }
 
 .search-status-text {
-	font-size: 26rpx;
-	color: #333;
+	font-size: $uni-font-size-sm;
+	color: $uni-text-color-grey;
 	margin-right: 10rpx;
+	flex: 1;
+	min-width: 0;
 }
 
+/* ===== 分类导航 ===== */
 .category-nav {
 	display: flex;
 	flex-wrap: wrap;
-	padding: 20rpx;
-	background-color: #fff;
-	margin-top: 20rpx;
-	border-radius: 20rpx;
-	width: calc(100% - 20rpx);
+	padding: 28rpx 10rpx 8rpx;
+	background-color: $uni-bg-color;
+	margin-top: $uni-spacing-gap;
+	border-radius: $uni-border-radius-card;
+	width: calc(100% - #{$uni-spacing-page} * 2);
 	box-sizing: border-box;
 	margin-left: auto;
 	margin-right: auto;
+	box-shadow: $uni-shadow-card;
 }
 
 .category-item {
@@ -1367,95 +1420,106 @@ export default {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	margin-bottom: 20rpx;
+	margin-bottom: 24rpx;
 }
 
+/* 分类图标选中反馈：作用于 lf-icon-item 根节点（class 经组件标签透传） */
 .category-icon {
-	width: 80rpx;
-	height: 80rpx;
-	border-radius: 40rpx;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	margin-bottom: 10rpx;
-	transition: all 0.3s;
+	transition: transform 0.2s;
 }
 
-.category-icon.active {
-	transform: scale(1.1);
-	box-shadow: 0 0 10rpx rgba(0, 0, 0, 0.2);
-}
-
-.icon-text {
-	color: #fff;
-	font-size: 32rpx;
-	font-weight: bold;
+.category-icon-active {
+	transform: scale(1.12);
 }
 
 .category-name {
-	font-size: 24rpx;
-	color: #333;
-	transition: all 0.3s;
+	font-size: $uni-font-size-caption;
+	color: $uni-text-color;
+	margin-top: 10rpx;
+	transition: color 0.2s;
 }
 
 .category-name.active {
-	color: #007AFF;
-	font-weight: bold;
+	color: $uni-color-primary;
+	font-weight: 600;
 }
 
+/* ===== 主 tab（分段控件 + 图标按钮） ===== */
 .tabs {
 	display: flex;
-	height: 80rpx;
-	background-color: #fff;
-	margin-top: 20rpx;
-	position: relative;
-	border-radius: 20rpx;
-	width: calc(100% - 20rpx);
+	align-items: center;
+	height: 96rpx;
+	background-color: $uni-bg-color;
+	margin-top: $uni-spacing-gap;
+	border-radius: $uni-border-radius-card;
+	width: calc(100% - #{$uni-spacing-page} * 2);
 	box-sizing: border-box;
 	margin-left: auto;
 	margin-right: auto;
+	padding: 0 16rpx;
+	box-shadow: $uni-shadow-card;
 }
 
-.tab-item {
+.tabs-segment {
 	flex: 1;
+	margin-right: 8rpx;
+}
+
+/* 主 tab 右侧的筛选/排序图标按钮 */
+.tabs-actions {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+}
+
+.tab-action {
+	width: 72rpx;
+	height: 72rpx;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	font-size: 28rpx;
-	color: #666;
-	position: relative;
+	border-radius: $uni-radius-sm;
+
+	&.active {
+		background-color: $uni-color-primary-soft;
+	}
+
+	&:active {
+		background-color: $uni-bg-color-hover;
+	}
 }
 
-.tab-item.active {
-	color: #007AFF;
-	font-weight: bold;
-}
-
-.tab-item.active::after {
-	content: '';
-	position: absolute;
+/* ===== 高级筛选面板（遮罩 + 右侧滑入） ===== */
+.filter-mask {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
 	bottom: 0;
-	left: 50%;
-	transform: translateX(-50%);
-	width: 60rpx;
-	height: 4rpx;
-	background-color: #007AFF;
-	border-radius: 2rpx;
+	background-color: $uni-bg-color-mask;
+	z-index: 998;
+	animation: lf-fade-in 0.25s ease;
 }
 
 .filter-panel {
 	position: fixed;
 	top: 0;
 	right: 0;
-	width: 80%;
+	width: 82%;
 	height: 100vh;
-	background-color: #fff;
+	background-color: $uni-bg-color;
 	z-index: 999;
-	box-shadow: -4rpx 0 20rpx rgba(0, 0, 0, 0.1);
+	box-shadow: $uni-shadow-raised;
 	padding: 30rpx;
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
+	transform: translateX(105%);
+	transition: transform 0.28s cubic-bezier(0.32, 0.72, 0.35, 1);
+
+	&.open {
+		transform: translateX(0);
+	}
 }
 
 .filter-scroll {
@@ -1467,23 +1531,38 @@ export default {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	padding-bottom: 30rpx;
-	border-bottom: 1rpx solid #eee;
+	padding-bottom: 24rpx;
+	border-bottom: 1rpx solid $uni-border-color-split;
 }
 
 .filter-title {
-	font-size: 32rpx;
-	font-weight: bold;
-	color: #333;
+	font-size: $uni-font-size-lg;
+	font-weight: 600;
+	color: $uni-text-color;
+}
+
+.filter-close {
+	width: 56rpx;
+	height: 56rpx;
+	border-radius: 50%;
+	background-color: $uni-bg-color-section;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+
+	&:active {
+		background-color: $uni-bg-color-hover;
+	}
 }
 
 .filter-section {
-	margin-top: 30rpx;
+	margin-top: 32rpx;
 }
 
 .filter-section-title {
-	font-size: 28rpx;
-	color: #333;
+	font-size: $uni-font-size-base;
+	color: $uni-text-color;
+	font-weight: 600;
 	margin-bottom: 20rpx;
 	display: block;
 }
@@ -1494,286 +1573,262 @@ export default {
 }
 
 .filter-tag {
-	padding: 10rpx 20rpx;
-	background-color: #f2f2f2;
-	border-radius: 30rpx;
-	margin-right: 20rpx;
-	margin-bottom: 20rpx;
-	font-size: 24rpx;
-	color: #666;
+	padding: 12rpx 28rpx;
+	background-color: $uni-bg-color-section;
+	border-radius: 28rpx;
+	margin-right: 18rpx;
+	margin-bottom: 18rpx;
+	font-size: $uni-font-size-caption;
+	color: $uni-text-color-grey;
+	border: 2rpx solid transparent;
+	transition: all 0.15s;
 }
 
 .filter-tag.active {
-	background-color: #007AFF;
-	color: #fff;
+	background-color: $uni-color-primary-soft;
+	color: $uni-color-primary;
+	font-weight: 500;
+	border-color: rgba($uni-color-primary, 0.35);
 }
 
 .filter-input {
 	width: 100%;
-	height: 70rpx;
-	background-color: #f2f2f2;
-	border-radius: 10rpx;
-	padding: 0 20rpx;
-	font-size: 26rpx;
+	height: 76rpx;
+	background-color: $uni-bg-color-section;
+	border-radius: $uni-radius-md;
+	padding: 0 24rpx;
+	font-size: $uni-font-size-sm;
 	margin-bottom: 10rpx;
+	box-sizing: border-box;
 }
 
 .filter-buttons {
 	margin-top: 30rpx;
 	display: flex;
 	justify-content: space-between;
-	padding-top: 30rpx;
-	border-top: 1rpx solid #eee;
+	padding-top: 24rpx;
+	border-top: 1rpx solid $uni-border-color-split;
 }
 
 .filter-btn {
 	width: 45%;
-	height: 80rpx;
-	border-radius: 40rpx;
+	height: 84rpx;
+	border-radius: 42rpx;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	font-size: 28rpx;
+	font-size: $uni-font-size-base;
+	font-weight: 500;
 }
 
 .filter-btn.reset {
-	background-color: #f2f2f2;
-	color: #666;
+	background-color: $uni-bg-color-section;
+	color: $uni-text-color-grey;
 }
 
 .filter-btn.apply {
-	background-color: #007AFF;
-	color: #fff;
+	background-color: $uni-color-primary;
+	color: $uni-text-color-inverse;
+	box-shadow: $uni-shadow-btn;
+
+	&:active {
+		background-color: $uni-color-primary-deep;
+	}
 }
 
+/* ===== 筛选结果提示 ===== */
 .filter-result-tip {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	padding: 20rpx;
-	background-color: #f0f8ff;
-	border-radius: 20rpx;
+	padding: 20rpx $uni-spacing-card;
+	background-color: $uni-color-primary-softer;
+	border: 2rpx solid rgba($uni-color-primary, 0.15);
+	border-radius: $uni-border-radius-card;
 	margin-bottom: 20rpx;
-	width: calc(100% - 20rpx);
+	width: calc(100% - #{$uni-spacing-page} * 2);
 	box-sizing: border-box;
 	margin-left: auto;
 	margin-right: auto;
 }
 
 .filter-result-text {
-	font-size: 26rpx;
-	color: #007AFF;
-	font-weight: bold;
+	font-size: $uni-font-size-sm;
+	color: $uni-color-primary;
+	font-weight: 600;
 }
 
 .filter-result-reset {
-	font-size: 24rpx;
-	color: #666;
-	padding: 6rpx 16rpx;
-	background-color: #fff;
-	border-radius: 20rpx;
+	font-size: $uni-font-size-caption;
+	color: $uni-text-color-grey;
+	padding: 6rpx 20rpx;
+	background-color: $uni-bg-color;
+	border-radius: 24rpx;
 }
 
+/* ===== 列表卡片内标签 ===== */
 .item-tags {
 	display: flex;
 	flex-shrink: 0;
 	max-width: 100%;
 	overflow: visible;
+	gap: 8rpx;
 }
 
 .item-category {
-	font-size: 24rpx;
-	color: #fff;
-	background-color: #007AFF;
-	padding: 4rpx 12rpx;
-	border-radius: 20rpx;
-	flex-shrink: 0;
-	white-space: nowrap;
-	margin-left: 5rpx;
-}
-
-.item-status {
-	font-size: 24rpx;
-	color: #fff;
-	background-color: #FF9500;
-	padding: 4rpx 12rpx;
-	border-radius: 20rpx;
-	margin-right: 5rpx;
+	font-size: $uni-font-size-caption;
+	color: $uni-color-primary;
+	background-color: $uni-color-primary-soft;
+	padding: 4rpx 14rpx;
+	border-radius: $uni-radius-xs;
 	flex-shrink: 0;
 	white-space: nowrap;
 }
 
-.item-status.completed {
-	background-color: #4CD964;
-}
-
-.item-type {
-	font-size: 24rpx;
-	color: #fff;
-	padding: 4rpx 12rpx;
-	border-radius: 20rpx;
-	margin-left: 5rpx;
-	flex-shrink: 0;
-	white-space: nowrap;
-}
-
-.item-type.lost {
-	background-color: #FF3B30;
-}
-
-.item-type.found {
-	background-color: #4CD964;
-}
-
+/* ===== 列表容器 ===== */
 .item-list {
-	height: calc(100vh - 600rpx);
-	padding: 20rpx 10rpx;
+	height: calc(100vh - 640rpx);
+	padding: 20rpx 10rpx calc(40rpx + env(safe-area-inset-bottom));
 	box-sizing: border-box;
 	width: 100%;
 	overflow-x: hidden;
 }
 
-.item-card {
+/* ===== 双列卡片网格（基础卡片样式见 common.scss .lf-card-list） ===== */
+.item-grid {
 	display: flex;
-	background-color: #fff;
-	border-radius: 20rpx;
-	padding: 20rpx;
-	margin-bottom: 20rpx;
-	box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
-	width: calc(100% - 20rpx);
-	box-sizing: border-box;
-	margin-left: auto;
-	margin-right: auto;
+	flex-wrap: wrap;
+	padding: 0 5rpx;
 }
 
-.item-image {
-	width: 160rpx;
-	height: 160rpx;
-	border-radius: 10rpx;
-	margin-right: 20rpx;
-	flex-shrink: 0;
-}
-
-.item-info {
-	flex: 1;
-	display: flex;
+.item-grid .item-card {
 	flex-direction: column;
+	width: calc(50% - 10rpx);
+	margin: 0 5rpx 20rpx;
+	padding: 0;
 	overflow: hidden;
-	width: calc(100% - 180rpx);
-	max-width: calc(100% - 180rpx);
 }
 
-.item-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 10rpx;
+.item-grid .item-image {
 	width: 100%;
-	overflow: visible;
+	height: 240rpx;
+	margin-right: 0;
+	border-radius: 0;
 }
 
-.item-name {
-	font-size: 32rpx;
-	color: #333;
-	font-weight: bold;
-	flex-shrink: 1;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	max-width: 50%;
+/* 骨架屏行 */
+.skeleton-card {
+	pointer-events: none;
 }
 
-.item-desc {
-	font-size: 26rpx;
-	color: #666;
+.skeleton-image {
+	width: 100%;
+	height: 240rpx;
+	border-radius: 0;
+}
+
+.skeleton-line-name {
+	width: 60%;
+	height: 32rpx;
+	margin-bottom: 14rpx;
+}
+
+.skeleton-line-tag {
+	width: 40%;
+	height: 28rpx;
+	margin-bottom: 14rpx;
+}
+
+.skeleton-line-desc {
+	width: 100%;
+	height: 24rpx;
 	margin-bottom: 10rpx;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	display: -webkit-box;
-	-webkit-line-clamp: 2;
-	line-clamp: 2;
-	-webkit-box-orient: vertical;
 }
 
-.item-footer {
+.skeleton-line-meta {
+	width: 70%;
+	height: 24rpx;
+	margin-top: 16rpx;
+}
+
+/* 无图物品的分类色块占位 */
+.item-image-placeholder {
 	display: flex;
-	justify-content: space-between;
 	align-items: center;
+	justify-content: center;
+}
+
+.placeholder-text {
+	color: $uni-text-color-inverse;
+	font-size: $uni-font-size-md;
+	font-weight: 600;
+	letter-spacing: 1rpx;
+}
+
+.item-grid .item-info {
+	/* 根因修复：默认 content-box 时 width:100% + padding 会撑出卡片右侧约 20rpx，
+	   时间被 .item-card 的 overflow:hidden 裁掉（表现为"时间显示被遮挡"） */
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 100%;
+	padding: 18rpx 22rpx 22rpx;
+}
+
+/* 名称行：名称弹性截断 + 时间固定右侧不缩放，时间不会再被挤压或遮挡 */
+.item-name-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	margin-bottom: 10rpx;
+}
+
+.item-grid .item-name {
+	flex: 1;
+	min-width: 0;
+	max-width: 100%;
+	margin-bottom: 0;
+}
+
+.item-grid .item-tags {
+	margin-bottom: 12rpx;
+	flex-wrap: wrap; /* 窄卡放不下 3 个标签时换行，避免溢出卡片 */
+}
+
+.item-grid .item-desc {
+	margin-bottom: 12rpx;
+}
+
+/* 底部地点行：细线分隔 + 整行省略号截断，超长地点不再顶到时间 */
+.item-grid .item-footer {
+	justify-content: flex-start;
 	margin-top: auto;
-	width: 100%;
+	padding-top: 14rpx;
+	border-top: 1rpx solid $uni-border-color-split;
 }
 
-.item-location {
-	font-size: 24rpx;
-	color: #999;
-	flex-shrink: 1;
+.location-icon {
+	flex-shrink: 0;
+	margin-right: 6rpx;
+}
+
+.item-grid .item-location {
+	flex: 1;
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	margin-right: 10rpx;
-	max-width: 50%;
 }
 
 .item-time {
-	font-size: 24rpx;
-	color: #999;
+	font-size: $uni-font-size-caption;
+	color: $uni-text-color-grey;
 	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	flex-shrink: 0;
-	text-align: right;
-	max-width: 50%;
+	flex-shrink: 0; /* 时间永远完整展示，不参与挤压 */
+	margin-left: 12rpx;
 }
 
-.loading-more {
-	text-align: center;
-	padding: 20rpx 0;
-}
-
-.loading-text {
-	font-size: 24rpx;
-	color: #999;
-}
-
-.empty-state {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	padding: 100rpx 0;
-}
-
-.empty-image {
-	width: 200rpx;
-	height: 200rpx;
-	margin-bottom: 20rpx;
-}
-
-.empty-text {
-	font-size: 28rpx;
-	color: #999;
-}
-
-.float-btn {
-	position: fixed;
-	right: 30rpx;
-	bottom: 100rpx;
-	width: 100rpx;
-	height: 100rpx;
-	background: linear-gradient(to right, #007AFF, #5AC8FA);
-	border-radius: 50%;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	box-shadow: 0 4rpx 20rpx rgba(0, 122, 255, 0.3);
-}
-
-.float-btn-icon {
-	font-size: 50rpx;
-	color: #fff;
-	font-weight: bold;
-}
-
+/* ===== 筛选面板日期选择 ===== */
 .date-picker-container {
 	width: 100%;
 }
@@ -1785,8 +1840,8 @@ export default {
 }
 
 .date-picker-label {
-	font-size: 26rpx;
-	color: #666;
+	font-size: $uni-font-size-sm;
+	color: $uni-text-color-grey;
 	width: 150rpx;
 }
 

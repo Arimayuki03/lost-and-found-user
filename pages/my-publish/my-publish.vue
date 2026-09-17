@@ -1,21 +1,11 @@
 <template>
   <!-- 该组件用于展示用户发布的失物和招领信息，并提供筛选和排序功能 -->
   <view class="my-publish-container">
-    <!-- 切换标签 -->
+    <!-- 切换标签（分段控件） -->
     <view class="tabs">
-      <view 
-        class="tab-item" 
-        :class="{ active: activeTab === 'lost' }"
-        @tap="switchTab('lost')"
-      >
-        我的失物
-      </view>
-      <view 
-        class="tab-item" 
-        :class="{ active: activeTab === 'found' }"
-        @tap="switchTab('found')"
-      >
-        我的招领
+      <view class="lf-segment">
+        <view class="lf-segment-item" :class="{ active: activeTab === 'lost' }" @tap="switchTab('lost')">我的失物</view>
+        <view class="lf-segment-item" :class="{ active: activeTab === 'found' }" @tap="switchTab('found')">我的招领</view>
       </view>
     </view>
     
@@ -25,7 +15,7 @@
       <view class="filter-btn" @tap="showFilterOptions">
         <view class="btn-content">
           <text>筛选</text>
-          <text class="icon">▼</text>
+          <uni-icons class="icon" type="bottom" size="14" :color="colorGrey" />
         </view>
       </view>
       
@@ -33,7 +23,7 @@
       <view class="sort-btn" @tap="showSortOptions">
         <view class="btn-content">
           <text>排序</text>
-          <text class="icon">▼</text>
+          <uni-icons class="icon" type="bottom" size="14" :color="colorGrey" />
         </view>
       </view>
       
@@ -121,7 +111,7 @@
           @tap="setSortOption('time-desc')"
         >
           <text>最新发布</text>
-          <text class="check-icon" v-if="sortOption === 'time-desc'">✓</text>
+          <uni-icons class="check-icon" v-if="sortOption === 'time-desc'" type="checkmarkempty" size="18" :color="colorPrimary" />
         </view>
         <view 
           class="sort-option" 
@@ -129,18 +119,20 @@
           @tap="setSortOption('time-asc')"
         >
           <text>最早发布</text>
-          <text class="check-icon" v-if="sortOption === 'time-asc'">✓</text>
+          <uni-icons class="check-icon" v-if="sortOption === 'time-asc'" type="checkmarkempty" size="18" :color="colorPrimary" />
         </view>
       </view>
     </view>
     
     <!-- 物品列表 -->
-    <scroll-view 
-      class="item-list" 
-      scroll-y 
+    <scroll-view
+      class="item-list lf-card-list"
+      scroll-y
       refresher-enabled
       :refresher-triggered="isRefreshing"
       @refresherrefresh="onRefresh"
+      @scrolltolower="onLoadMore"
+      lower-threshold="80"
     >
       <!-- 失物列表 -->
       <view v-if="activeTab === 'lost' && lostItems.length > 0">
@@ -155,15 +147,11 @@
             <view class="item-header">
               <text class="item-name">{{ item.name }}</text>
               <view class="status-container">
-                <view class="item-status" :class="getStatusClass(item.is_completed ? 'closed' : 'open')">
-                  {{ getStatusText(item.is_completed ? 'closed' : 'open') }}
-                </view>
-                <view v-if="item.is_under_review" class="review-status under-review">
-                  审核中
-                </view>
-                <view v-else class="review-status reviewed">
-                  已审核
-                </view>
+                <lf-status-tag
+                  :status="item.is_completed ? 'completed' : 'open'"
+                  :label="getStatusText(item.is_completed ? 'closed' : 'open')"
+                />
+                <lf-status-tag :status="item.is_under_review ? 'reviewing' : 'reviewed'" :label="item.is_under_review ? '审核中' : '已审核'" />
               </view>
             </view>
             <text class="item-desc">{{ item.description }}</text>
@@ -209,15 +197,11 @@
             <view class="item-header">
               <text class="item-name">{{ item.name }}</text>
               <view class="status-container">
-                <view class="item-status" :class="getStatusClass(item.is_completed ? 'closed' : 'open')">
-                  {{ getStatusText(item.is_completed ? 'closed' : 'open') }}
-                </view>
-                <view v-if="item.is_under_review" class="review-status under-review">
-                  审核中
-                </view>
-                <view v-else class="review-status reviewed">
-                  已审核
-                </view>
+                <lf-status-tag
+                  :status="item.is_completed ? 'completed' : 'open'"
+                  :label="getStatusText(item.is_completed ? 'closed' : 'open')"
+                />
+                <lf-status-tag :status="item.is_under_review ? 'reviewing' : 'reviewed'" :label="item.is_under_review ? '审核中' : '已审核'" />
               </view>
             </view>
             <text class="item-desc">{{ item.description }}</text>
@@ -251,17 +235,20 @@
       </view>
       
       <!-- 空状态 -->
-      <view class="empty-state" v-if="(activeTab === 'lost' && lostItems.length === 0) || (activeTab === 'found' && foundItems.length === 0)">
-        <image class="empty-image" src="/static/logo.png" mode="aspectFit"></image>
-        <text class="empty-text">{{ activeTab === 'lost' ? '暂无失物信息' : '暂无招领信息' }}</text>
-        <view class="publish-btn" @tap="goToPublish">去发布</view>
-      </view>
+      <lf-empty
+        v-if="(activeTab === 'lost' && lostItems.length === 0) || (activeTab === 'found' && foundItems.length === 0)"
+        type="items"
+        :text="activeTab === 'lost' ? '暂无失物信息' : '暂无招领信息'"
+        button-text="去发布"
+        @action="goToPublish"
+      />
     </scroll-view>
   </view>
 </template>
 
 <script>
 import { checkLogin, goToLogin } from '../../utils/common';
+import { COLOR_PRIMARY, COLOR_GREY } from '@/config/ui';
 
 /**
  * 我的发布页面
@@ -270,10 +257,17 @@ import { checkLogin, goToLogin } from '../../utils/common';
 export default {
   data() {
     return {
+      colorPrimary: COLOR_PRIMARY,
+      colorGrey: COLOR_GREY, // 辅助图标灰（与 $uni-text-color-grey 同步）
       activeTab: 'lost',
       lostItems: [],
       foundItems: [],
       isRefreshing: false,
+      // 分页状态（触底加载更多）
+      page: 1,
+      size: 10,
+      hasMore: true,
+      isLoadingMore: false,
       // 筛选和排序相关
       showFilter: false,
       showSort: false,
@@ -337,35 +331,91 @@ export default {
     /**
      * 加载数据
      * 根据当前活动标签加载失物或招领列表
+     * @param {Object} [options] 加载选项
+     * @param {Boolean} [options.append=false] true 时为触底追加，false 时重置到第一页
      */
-    async loadData() {
-      uni.showLoading({
-        title: '加载中...'
-      });
-      
+    async loadData(options = {}) {
+      const append = !!options.append;
+      // 触底追加由 isLoadingMore 防重入；首屏/刷新走 showLoading
+      if (append) {
+        if (this.isLoadingMore || !this.hasMore) return;
+        this.isLoadingMore = true;
+      } else {
+        this.page = 1;
+        this.hasMore = true;
+        uni.showLoading({
+          title: '加载中...'
+        });
+      }
+
       try {
+        const params = { page: this.page, size: this.size };
+        let res;
         if (this.activeTab === 'lost') {
           // 获取我的失物列表
-          const res = await this.$api.lostItem.getMyList();
-          this.originalLostItems = res.items || [];
-          // 应用筛选和排序
-          this.applyFiltersAndSort();
+          res = await this.$api.lostItem.getMyList(params);
         } else {
           // 获取我的招领列表
-          const res = await this.$api.foundItem.getMyList();
-          this.originalFoundItems = res.items || [];
-          // 应用筛选和排序
-          this.applyFiltersAndSort();
+          res = await this.$api.foundItem.getMyList(params);
         }
-        
-        uni.hideLoading();
+
+        const pageItems = res.items || [];
+        // hasMore 兼容判断：响应带 total 时按 total 算，否则按本页条数是否满一页算
+        if (typeof res.total === 'number') {
+          this.hasMore = this.page * this.size < res.total;
+        } else {
+          this.hasMore = pageItems.length >= this.size;
+        }
+
+        if (append) {
+          // 追加到原始数据尾部；重复项（极端情况下的页边界重复）按 id 去重
+          const original = this.activeTab === 'lost' ? this.originalLostItems : this.originalFoundItems;
+          const existIds = new Set(original.map(item => String(item.id)));
+          const newItems = pageItems.filter(item => !existIds.has(String(item.id)));
+          if (this.activeTab === 'lost') {
+            this.originalLostItems = original.concat(newItems);
+          } else {
+            this.originalFoundItems = original.concat(newItems);
+          }
+        } else {
+          if (this.activeTab === 'lost') {
+            this.originalLostItems = pageItems;
+          } else {
+            this.originalFoundItems = pageItems;
+          }
+        }
+
+        // 指向下一页
+        this.page += 1;
+        // 应用筛选和排序
+        this.applyFiltersAndSort();
+
+        if (append) {
+          this.isLoadingMore = false;
+        } else {
+          uni.hideLoading();
+        }
       } catch (error) {
-        uni.hideLoading();
+        // 追加失败回退页码，下次触底重新请求同一页
+        if (append) {
+          this.page = Math.max(1, this.page - 1);
+          this.isLoadingMore = false;
+        } else {
+          uni.hideLoading();
+        }
         uni.showToast({
           title: '加载失败，请稍后再试',
           icon: 'none'
         });
       }
+    },
+
+    /**
+     * 触底加载更多（scroll-view scrolltolower）
+     */
+    onLoadMore() {
+      if (!this.hasMore || this.isLoadingMore) return;
+      this.loadData({ append: true });
     },
     
     /**
@@ -458,6 +508,10 @@ export default {
     switchTab(tab) {
       if (this.activeTab !== tab) {
         this.activeTab = tab;
+        // 切换标签重置分页状态，从第一页重新加载
+        this.page = 1;
+        this.hasMore = true;
+        this.isLoadingMore = false;
         this.loadData();
       }
     },
@@ -750,111 +804,34 @@ export default {
 };
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 /* 页面容器 */
 .my-publish-container {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background-color: $uni-bg-color-grey;
   display: flex;
   flex-direction: column;
 }
 
-/* 标签栏样式 */
+/* 标签栏（分段控件，公共样式见 common.scss .lf-segment） */
 .tabs {
-  display: flex;
-  height: 80rpx;
-  background-color: #fff;
-  border-bottom: 1px solid #f5f5f5;
-}
-
-.tab-item {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28rpx;
-  color: #666;
-  position: relative;
-}
-
-.tab-item.active {
-  color: #007AFF;
-  font-weight: bold;
-}
-
-.tab-item.active::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60rpx;
-  height: 4rpx;
-  background-color: #007AFF;
-  border-radius: 2rpx;
+  padding: 24rpx;
+  background-color: $uni-bg-color;
+  box-shadow: 0 2rpx 12rpx rgba(31, 41, 55, 0.04);
 }
 
 /* 列表区域样式 */
 .item-list {
   flex: 1;
-  padding: 20rpx 10rpx;
+  padding: 20rpx 10rpx calc(40rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
   width: 100%;
   overflow-x: hidden;
 }
 
-/* 物品卡片样式 */
-.item-card {
-  display: flex;
-  background-color: #fff;
-  border-radius: 20rpx;
-  padding: 20rpx;
-  margin-bottom: 20rpx;
-  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
-  width: calc(100% - 20rpx);
-  box-sizing: border-box;
-  margin-right: 10rpx;
-  margin-left: 10rpx;
-}
+/* 物品卡片：横向布局（图左文右），基础样式见 common.scss .lf-card-list */
 
-.item-image {
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: 10rpx;
-  margin-right: 20rpx;
-  flex-shrink: 0;
-}
-
-.item-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  width: calc(100% - 180rpx);
-  max-width: calc(100% - 180rpx);
-}
-
-/* 物品标题和状态栏 */
-.item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10rpx;
-  width: 100%;
-  overflow: visible;
-}
-
-.item-name {
-  font-size: 32rpx;
-  color: #333;
-  font-weight: bold;
-  flex-shrink: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 50%;
-}
-
+/* 标题行：名称 + 状态标签组 */
 .status-container {
   display: flex;
   flex-direction: row;
@@ -862,68 +839,10 @@ export default {
   flex-shrink: 0;
   max-width: 50%;
   overflow: visible;
+  gap: 8rpx;
 }
 
-/* 物品状态标签 */
-.item-status {
-  font-size: 24rpx;
-  color: #fff;
-  padding: 4rpx 12rpx;
-  border-radius: 20rpx;
-  margin-right: 5rpx;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.status-open {
-  background-color: #007AFF;
-}
-
-.status-closed {
-  background-color: #999;
-}
-
-/* 审核状态标签 */
-.review-status {
-  font-size: 22rpx;
-  color: #fff;
-  padding: 4rpx 12rpx;
-  border-radius: 20rpx;
-  margin-left: 5rpx;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.reviewed {
-  background-color: #4CD964;
-}
-
-.under-review {
-  background-color: #FF9500;
-}
-
-/* 物品描述 */
-.item-desc {
-  font-size: 26rpx;
-  color: #666;
-  margin-bottom: 10rpx;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-/* 物品底部信息 */
-.item-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10rpx;
-  width: 100%;
-}
-
+/* 时间行 */
 .time-container {
   display: flex;
   flex-direction: row;
@@ -933,8 +852,8 @@ export default {
 }
 
 .item-time {
-  font-size: 22rpx;
-  color: #666;
+  font-size: $uni-font-size-caption;
+  color: $uni-text-color-grey;
   margin-right: 10rpx;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -942,111 +861,87 @@ export default {
 }
 
 .relative-time {
-  font-size: 20rpx;
-  color: #999;
-  background-color: #f5f5f5;
-  padding: 2rpx 8rpx;
-  border-radius: 10rpx;
+  font-size: $uni-font-size-caption;
+  color: $uni-text-color-grey;
+  background-color: $uni-bg-color-section;
+  padding: 4rpx 12rpx;
+  border-radius: $uni-radius-xs;
   flex-shrink: 0;
 }
 
-/* 物品操作按钮 */
+/* 物品操作按钮（浅 tint 软按钮体系） */
 .item-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 10rpx;
+  margin-top: 16rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid $uni-border-color-split;
 }
 
 .action-btn {
-  height: 50rpx;
-  padding: 0 20rpx;
-  border-radius: 25rpx;
-  font-size: 24rpx;
+  height: 56rpx;
+  padding: 0 26rpx;
+  border-radius: 28rpx;
+  font-size: $uni-font-size-caption;
+  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 20rpx;
+  margin-left: 16rpx;
+  transition: opacity 0.15s;
+
+  &:active {
+    opacity: 0.7;
+  }
 }
 
 .edit-btn {
-  background-color: #f5f5f5;
-  color: #666;
+  background-color: $uni-bg-color-section;
+  color: $uni-text-color;
 }
 
 .delete-btn {
-  background-color: #f5f5f5;
-  color: #FF3B30;
+  background-color: $uni-color-error-soft;
+  color: $uni-color-error;
 }
 
 .status-btn {
-  background-color: #007AFF;
-  color: #fff;
+  background-color: $uni-color-primary-soft;
+  color: $uni-color-primary;
 }
 
 /* 禁用状态按钮 */
 .disabled-btn {
-  opacity: 0.5;
-  background-color: #cccccc !important;
-  color: #666666 !important;
+  opacity: $uni-opacity-disabled;
   pointer-events: none;
 }
 
-/* 空状态提示 */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 100rpx 0;
-}
-
-.empty-image {
-  width: 200rpx;
-  height: 200rpx;
-  margin-bottom: 20rpx;
-}
-
-.empty-text {
-  font-size: 28rpx;
-  color: #999;
-  margin-bottom: 30rpx;
-}
-
-.publish-btn {
-  width: 200rpx;
-  height: 70rpx;
-  background: linear-gradient(to right, #007AFF, #5AC8FA);
-  color: #fff;
-  border-radius: 35rpx;
-  font-size: 28rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* 筛选和排序容器 */
+/* ===== 筛选和排序工具条 ===== */
 .filter-sort-container {
   display: flex;
-  height: 70rpx;
-  background-color: #fff;
-  border-bottom: 1px solid #f5f5f5;
+  height: 84rpx;
+  background-color: $uni-bg-color;
   align-items: center;
   justify-content: center;
-  padding: 0 20rpx;
+  padding: 0 24rpx;
 }
 
 .filter-btn, .sort-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f5f5f5;
-  border-radius: 20rpx;
-  margin-right: 15rpx;
-  font-size: 22rpx;
-  color: #666;
-  height: 44rpx;
-  width: 100rpx;
+  background-color: $uni-bg-color-section;
+  border-radius: 28rpx;
+  margin-right: 16rpx;
+  font-size: $uni-font-size-caption;
+  color: $uni-text-color;
+  height: 52rpx;
+  width: 116rpx;
   box-sizing: border-box;
+
+  &:active {
+    background-color: $uni-bg-color-hover;
+  }
 }
 
 .btn-content {
@@ -1057,7 +952,6 @@ export default {
 }
 
 .icon {
-  font-size: 18rpx;
   margin-left: 4rpx;
 }
 
@@ -1072,12 +966,12 @@ export default {
   align-items: center;
   justify-content: center;
   padding: 0;
-  background-color: rgba(0, 122, 255, 0.1);
-  border-radius: 20rpx;
-  font-size: 22rpx;
-  color: #007AFF;
-  height: 44rpx;
-  width: 90rpx;
+  background-color: $uni-color-primary-soft;
+  border-radius: 28rpx;
+  font-size: $uni-font-size-caption;
+  color: $uni-color-primary;
+  height: 52rpx;
+  width: 104rpx;
   box-sizing: border-box;
 }
 
@@ -1086,17 +980,17 @@ export default {
   align-items: center;
   justify-content: center;
   padding: 0;
-  background-color: rgba(255, 59, 48, 0.1);
-  border-radius: 20rpx;
-  font-size: 22rpx;
-  color: #FF3B30;
-  margin-left: 10rpx;
-  height: 44rpx;
-  width: 70rpx;
+  background-color: $uni-color-error-soft;
+  border-radius: 28rpx;
+  font-size: $uni-font-size-caption;
+  color: $uni-color-error;
+  margin-left: 12rpx;
+  height: 52rpx;
+  width: 84rpx;
   box-sizing: border-box;
 }
 
-/* 筛选和排序弹出层 */
+/* ===== 筛选和排序弹出层 ===== */
 .filter-popup, .sort-popup {
   position: fixed;
   top: 0;
@@ -1113,6 +1007,7 @@ export default {
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.25s ease;
 }
 
 .filter-popup-content {
@@ -1120,9 +1015,9 @@ export default {
   top: 0;
   left: 0;
   right: 0;
-  background-color: #fff;
-  border-radius: 0 0 20rpx 20rpx;
-  padding: 30rpx;
+  background-color: $uni-bg-color;
+  border-radius: 0 0 32rpx 32rpx;
+  padding: 36rpx 30rpx;
   animation: slideDown 0.3s ease;
 }
 
@@ -1131,10 +1026,15 @@ export default {
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: #fff;
-  border-radius: 20rpx 20rpx 0 0;
-  padding: 30rpx;
+  background-color: $uni-bg-color;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 36rpx 30rpx calc(36rpx + env(safe-area-inset-bottom));
   animation: slideUp 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes slideDown {
@@ -1149,10 +1049,11 @@ export default {
 
 /* 筛选和排序标题 */
 .filter-title, .sort-title {
-  font-size: 32rpx;
-  font-weight: bold;
+  font-size: $uni-font-size-lg;
+  font-weight: 600;
   margin-bottom: 30rpx;
   text-align: center;
+  color: $uni-text-color;
 }
 
 .filter-section {
@@ -1160,8 +1061,9 @@ export default {
 }
 
 .filter-section-title {
-  font-size: 28rpx;
-  color: #333;
+  font-size: $uni-font-size-base;
+  color: $uni-text-color;
+  font-weight: 600;
   margin-bottom: 20rpx;
 }
 
@@ -1171,65 +1073,81 @@ export default {
 }
 
 .filter-option {
-  padding: 8rpx 16rpx;
-  background-color: #f5f5f5;
-  border-radius: 20rpx;
-  margin-right: 15rpx;
-  margin-bottom: 15rpx;
-  font-size: 22rpx;
-  color: #666;
+  padding: 12rpx 28rpx;
+  background-color: $uni-bg-color-section;
+  border-radius: 28rpx;
+  margin-right: 18rpx;
+  margin-bottom: 18rpx;
+  font-size: $uni-font-size-caption;
+  color: $uni-text-color-grey;
+  border: 2rpx solid transparent;
+  transition: all 0.15s;
 }
 
 .filter-option.active {
-  background-color: #007AFF;
-  color: #fff;
+  background-color: $uni-color-primary-soft;
+  color: $uni-color-primary;
+  font-weight: 500;
+  border-color: rgba($uni-color-primary, 0.35);
 }
 
 .filter-actions {
   display: flex;
   justify-content: space-between;
   margin-top: 30rpx;
+  gap: 24rpx;
 }
 
 .filter-actions .filter-btn {
   flex: 1;
-  height: 70rpx;
+  height: 84rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 35rpx;
-  font-size: 26rpx;
+  border-radius: 42rpx;
+  font-size: $uni-font-size-base;
+  font-weight: 500;
   width: auto;
+  margin-right: 0;
 }
 
 .filter-actions .filter-btn.cancel {
-  background-color: #f5f5f5;
-  color: #666;
-  margin-right: 20rpx;
+  background-color: $uni-bg-color-section;
+  color: $uni-text-color-grey;
 }
 
 .filter-actions .filter-btn.confirm {
-  background-color: #007AFF;
-  color: #fff;
+  background-color: $uni-color-primary;
+  color: $uni-text-color-inverse;
+  box-shadow: $uni-shadow-btn;
 }
 
 .sort-option {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 25rpx 0;
-  border-bottom: 1px solid #f5f5f5;
-  font-size: 26rpx;
-  color: #333;
+  padding: 28rpx 0;
+  border-bottom: 1rpx solid $uni-border-color-split;
+  font-size: $uni-font-size-base;
+  color: $uni-text-color;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:active {
+    background-color: $uni-bg-color-hover;
+  }
 }
 
 .sort-option.active {
-  color: #007AFF;
+  color: $uni-color-primary;
+  font-weight: 500;
 }
 
 .check-icon {
-  color: #007AFF;
+  color: $uni-color-primary;
   font-weight: bold;
-  font-size: 26rpx;
+  font-size: $uni-font-size-base;
 }
-</style> 
+</style>

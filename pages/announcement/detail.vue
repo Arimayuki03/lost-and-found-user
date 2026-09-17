@@ -124,27 +124,28 @@ export default {
 };
 </script>
 
-<style lang="scss">
+<style lang="scss" scoped>
 /* 页面整体样式 */
 .announcement-detail {
-	padding: 30rpx;
-	background-color: #f8f8f8;
+	padding: 24rpx;
+	background-color: $uni-bg-color-grey;
 	min-height: 100vh;
 }
 
 /* 公告卡片样式 */
 .announcement-card {
-	background-color: #fff;
-	border-radius: 20rpx;
-	padding: 30rpx;
-	box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+	background-color: $uni-bg-color;
+	border-radius: $uni-border-radius-card;
+	padding: 36rpx 32rpx;
+	box-shadow: $uni-shadow-card;
 }
 
 /* 公告标题 */
 .announcement-title {
-	font-size: 36rpx;
-	font-weight: bold;
-	color: #333;
+	font-size: 40rpx;
+	font-weight: 600;
+	color: $uni-text-color;
+	line-height: 1.4;
 	margin-bottom: 20rpx;
 }
 
@@ -153,20 +154,22 @@ export default {
 	display: flex;
 	flex-direction: column;
 	margin-bottom: 30rpx;
+	padding-bottom: 28rpx;
+	border-bottom: 1rpx solid $uni-border-color-split;
 }
 
 /* 时间显示样式 */
 .announcement-time {
-	font-size: 24rpx;
-	color: #999;
-	margin-bottom: 6rpx;
+	font-size: $uni-font-size-caption;
+	color: $uni-text-color-grey;
+	margin-bottom: 8rpx;
 }
 
 /* 公告内容样式 */
 .announcement-content {
-	font-size: 28rpx;
-	color: #666;
-	line-height: 1.6;
+	font-size: $uni-font-size-md;
+	color: $uni-text-color;
+	line-height: 1.9;
 	white-space: pre-wrap;
 }
 
@@ -182,17 +185,23 @@ export default {
 /* 加载和错误文本 */
 .loading-text, .error-text {
 	font-size: 28rpx;
-	color: #999;
+	color: $uni-text-color-grey;
 	margin-bottom: 20rpx;
 }
 
 /* 重试按钮样式 */
 .retry-button {
 	margin-top: 20rpx;
-	background-color: #007AFF;
-	color: #fff;
-	font-size: 28rpx;
-	padding: 10rpx 30rpx;
-	border-radius: 10rpx;
+	background-color: $uni-color-primary-soft;
+	color: $uni-color-primary;
+	font-size: $uni-font-size-base;
+	font-weight: 500;
+	padding: 16rpx 56rpx;
+	border-radius: $uni-border-radius-btn;
+	border: none;
+
+	&::after {
+		border: none;
+	}
 }
 </style> 

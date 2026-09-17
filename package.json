@@ -1,7 +1,8 @@
 {
-  "name": "lost_and_found_user",
+  "name": "lost-and-found-user",
   "version": "1.0.0",
   "description": "校园失物招领平台用户端（uni-app Vue3）",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "dev:mp-weixin": "uni -p mp-weixin",
