@@ -1,4 +1,5 @@
 import socketIOService from './socketio';
+import { updateMessageBadge } from './common';
 
 /**
  * 统一登出（登录态失效 401 专用）
@@ -41,6 +42,14 @@ export const forceLogout = () => {
     socketIOService.close();
   } catch (e) {
     // socket 服务未初始化时忽略
+  }
+
+  // 2.1 清除"消息"tabBar 未读角标（与 utils/common.js updateMessageBadge 设置角标对称），
+  //     传入 0 走 removeTabBarBadge 分支；当前页非 tabBar 页等场景失败时静默
+  try {
+    updateMessageBadge(0);
+  } catch (e) {
+    // 角标清除失败不影响登出流程
   }
 
   // 3. 重置 Vuex 登录态（动态引入避免循环依赖；store 未就绪时静默，不影响跳转）

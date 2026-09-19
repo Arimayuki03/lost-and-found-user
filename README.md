@@ -55,6 +55,8 @@
 
 ### 方式二：CLI（可选）
 
+CLI 构建由 `vite.config.js` 支撑（`@` 别名映射到项目根、补 `.vue` 扩展名解析），与 HBuilderX 编译行为一致。
+
 ```bash
 npm install
 npm run dev:h5          # H5 开发
@@ -140,13 +142,15 @@ lost_and_found_user/
 - JWT 双令牌：access token + refresh token，存于本地存储（`token` / `refreshToken`）。
 - 请求前自动检查 token：已过期则先静默刷新再请求；即将过期（剩余 < 5 分钟）也会提前刷新；401 时自动刷新并重试一次。
 - 单例刷新（Promise 缓存）避免并发刷新；应用启动时通过 `setupAutoRefreshToken` 设置提前刷新的定时器。
+- 刷新失败按失败类型分流：401/认证失败停止定时器并走登出；网络错误 / 5xx / 429 等其他失败按指数退避重试（5s 起步、上限 5 分钟、连续 5 次后停止），避免 0 延迟死循环。
 - 刷新失败则清除本地登录态并跳转登录页。
 
 ### 实时通信（utils/socketio.js）
 
 - 单例 `SocketIOService`：连接时携带 token 完成认证（`authenticate` → `authenticate_result`）。
 - 加入个人房间接收消息；进入聊天页时按「两个用户 ID 升序拼接」规则（`chat:小ID-大ID`）加入唯一私聊房间。
-- 事件：`send_private_message` / `receive_private_message`（收发消息）、`notify_message_read_private` / `private_message_read`（已读回执）、`user_status`（在线状态），并兼容旧版 `receive_message` / `message_read` 事件。
+- 事件：`send_private_message` / `receive_private_message`（收发消息）、`message_sent`（发送回执，按 temp_id 匹配，超时判失败）、`notify_message_read_private` / `private_message_read`（已读回执）、`user_status`（在线状态），并兼容旧版 `receive_message` / `message_read` 事件。
+- 发送失败的消息在聊天页标记为「发送失败，点击重发」，可点击气泡重试。
 - 自动重连（最多 5 次）、连接超时重试、页面活跃状态管理。
 
 ## 状态管理（store/index.js）

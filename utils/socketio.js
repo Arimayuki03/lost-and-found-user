@@ -18,6 +18,9 @@ class SocketIOService {
     this._joinedRooms = [];
     this.userStatusCallbacks = [];
     this._badgeRefreshTimer = null;
+    // 待确认发送队列：tempId -> { timer, onSent, onFailed }（M14）
+    // message_sent 回执按 temp_id 命中即标记已发送；10 秒超时未收到回执则按发送失败处理
+    this._pendingSends = new Map();
 
     // #ifdef H5
     // 页面重新可见时（切回标签页/从后台恢复）若已登录但未连接，主动重建连接。
@@ -203,6 +206,9 @@ class SocketIOService {
           this.connecting = false;
           // 服务端房间随连接断开而失效，必须清空本地缓存，重连成功后重新加入
           this._joinedRooms = [];
+          // 断开时清空待确认发送队列的定时器（连接断了收不到回执，由页面侧标记失败/重发）
+          this._pendingSends.forEach((pending) => clearTimeout(pending.timer));
+          this._pendingSends.clear();
           // 注意：不要置空 this.socket —— 保留引用让 socket.io 内置重连继续工作，
           // 重连成功后会再次触发 connect → authenticate → joinRoom 重新入房
         });
@@ -238,6 +244,11 @@ class SocketIOService {
     this.connected = false;
     // 断开后服务端房间全部失效，清空本地已加入房间缓存
     this._joinedRooms = [];
+    // 清空待确认发送队列，避免其定时器在重连后误触发
+    if (this._pendingSends) {
+      this._pendingSends.forEach((pending) => clearTimeout(pending.timer));
+      this._pendingSends.clear();
+    }
   }
   
   /**
@@ -563,82 +574,113 @@ class SocketIOService {
   }
 
   /**
-   * 发送消息
+   * 注册 message_sent 回执监听（initSocket 时随 registerDefaultEvents 一次性注册）。
+   * 后端发送成功后回发 { success, message_id, room_name, temp_id }（chat.py:331-336），
+   * 此前该事件被完全丢弃——发送失败或未入房收不到房间回显时气泡永久停留在"发送中"。
+   * 这里只把"发送中"置为"已发送"，不插入消息：房间回显（receive_private_message）
+   * 会按消息 id 匹配临时消息并归位，两侧互补去重，不会双写。
    */
-  sendMessage(receiverId, message) {
+  handleSentReceipt(data) {
+    try {
+      if (!data || !data.temp_id || !this._pendingSends.has(data.temp_id)) {
+        return;
+      }
+      const pending = this._pendingSends.get(data.temp_id);
+      clearTimeout(pending.timer);
+      this._pendingSends.delete(data.temp_id);
+      if (data.success && typeof pending.onSent === 'function') {
+        pending.onSent(data);
+      } else if (!data.success && typeof pending.onFailed === 'function') {
+        pending.onFailed(data);
+      }
+    } catch (error) {
+      // 回执处理失败不影响消息收发主流程
+    }
+  }
+
+  /**
+   * 发送消息
+   * @param {string|number} receiverId 接收者ID
+   * @param {string} message 消息内容
+   * @param {string} [tempId] 本地消息的临时ID（chat.vue 生成），用于与后端 message_sent
+   *                 回执的 temp_id 对齐匹配；不传时内部自行生成（仅超时失败回调可用）
+   * @param {Object} [callbacks] { onSent, onFailed } 发送结果回调（可选）
+   * @returns {boolean} 是否成功发出（socket 不可用/参数非法返回 false）
+   */
+  sendMessage(receiverId, message, tempId, callbacks) {
     // 检查socket连接状态
     if (!this.socket || !this.connected) {
       return false;
     }
-    
+
     // 检查接收者ID
     if (!receiverId) {
       return false;
     }
-    
+
     // 检查消息内容
     if (!message || (typeof message === 'string' && message.trim() === '')) {
       return false;
     }
-    
+
     // 获取token
     const token = uni.getStorageSync('token');
     if (!token) {
       return false;
     }
-    
+
     // 获取当前用户信息
     const currentUser = store.state.userInfo;
     if (!currentUser || !currentUser.id) {
       // 不阻止发送，因为token可能是有效的
     }
-    
+
     try {
-      // 创建一个唯一ID，用于后续识别消息发送结果
-      const messageId = `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-      
+      // 临时ID：优先复用 chat.vue 生成的本地消息 temp id（与 message_sent 回执对齐），
+      // 未传时内部生成兜底，保证消息可追踪（M14：此前生成的 messageId 无任何前端消费）
+      const messageId = tempId || `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
       // 生成私聊房间名
       const roomName = this.generateUniqueRoomName(currentUser.id, receiverId);
       if (!roomName) {
         return false;
       }
-      
-      // 定义成功消息监听器
-      const successHandler = (data) => {
-        if (data && data.success) {
-          // 移除监听器
-          this.socket.off('message_sent', successHandler);
-        }
-      };
-      
-      // 定义错误监听器
-      const errorHandler = (errorData) => {
-        if (errorData && errorData.originEvent === 'send_private_message') {
-          // 移除监听器
-          this.socket.off('error', errorHandler);
-        }
-      };
-      
-      // 注册临时监听器
-      this.socket.on('message_sent', successHandler);
-      this.socket.on('error', errorHandler);
-      
+
+      // 登记"发送中"状态与结果回调：回执到达或超时后按 temp_id 命中处理
+      if (tempId) {
+        // 同一 tempId 重复登记（如快速重发）时先清理旧的等待项
+        const previous = this._pendingSends.get(tempId);
+        if (previous) clearTimeout(previous.timer);
+
+        const pending = {
+          timer: setTimeout(() => {
+            // 10 秒未收到 message_sent 回执视为发送失败（服务端未入库/未入房）。
+            // 房间回显后到的情况极少见；若之后回显到达，会按消息 id 正常归位清除状态
+            this._pendingSends.delete(tempId);
+            if (callbacks && typeof callbacks.onFailed === 'function') {
+              try {
+                callbacks.onFailed({ temp_id: tempId, error: '发送超时' });
+              } catch (e) {
+                // 业务回调异常不影响服务本身
+              }
+            }
+          }, 10000),
+          onSent: callbacks && typeof callbacks.onSent === 'function' ? callbacks.onSent : null,
+          onFailed: callbacks && typeof callbacks.onFailed === 'function' ? callbacks.onFailed : null
+        };
+        this._pendingSends.set(tempId, pending);
+      }
+
       // 发送消息到私聊房间，确保属性名与后端一致
       this.socket.emit('send_private_message', {
         receiver_id: receiverId,
         room_name: roomName,  // 使用room_name替代room
         message: message,
-        token: token, 
+        token: token,
         authorization: `Bearer ${token}`,
-        message_id: messageId  // 用于前端跟踪的临时ID
+        message_id: messageId  // 后端原样作为 temp_id 回发（chat.py:335）
       });
-      
-      // 10秒后自动移除监听器
-      setTimeout(() => {
-        this.socket.off('message_sent', successHandler);
-        this.socket.off('error', errorHandler);
-      }, 10000);
-      
+
       return true;
     } catch (error) {
       return false;
@@ -780,6 +822,16 @@ class SocketIOService {
       
       // 加入私聊房间的结果由 joinChatTargetRoom 内注册的具名监听器处理，
       // 此处不再重复注册全局监听（避免与临时监听器重复消费同一次结果）
+
+      // 发送回执：后端入库成功后向发送者回发 message_sent（含 temp_id），
+      // 按回执把对应本地消息从"发送中"置为"已发送"（M14）
+      this.socket.on('message_sent', (data) => {
+        try {
+          this.handleSentReceipt(data);
+        } catch (error) {
+          // 处理发送达回执事件时出错
+        }
+      });
 
       // 服务器错误
       this.socket.on('error', (data) => {

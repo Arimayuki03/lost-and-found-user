@@ -431,43 +431,31 @@ export default {
 		
 		// 过滤后的失物列表
 		filteredLostItems() {
-			let items = this.lostItems;
-			
-			// 按分类筛选
-			if (this.selectedCategory) {
-				items = items.filter(item => item.category === this.selectedCategory);
-			}
-			
-			// 按时间排序
-			items = [...items].sort((a, b) => {
+			// 分类筛选统一走后端：selectCategory 已把 category 作为 sift 参数请求，
+			// store 里就是筛选后的数据，此处不再本地二次过滤（避免与后端双轨不一致），
+			// 仅保留客户端排序（排序按钮为纯前端行为，不影响分页）
+			const items = [...this.lostItems].sort((a, b) => {
 				const timeA = new Date(a.lost_time).getTime();
 				const timeB = new Date(b.lost_time).getTime();
 				return this.sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
 			});
-			
+
 			// 不再在计算属性中进行关键词搜索，而是在 handleSearch 方法中处理
-			
+
 			return items;
 		},
-		
+
 		// 过滤后的招领列表
 		filteredFoundItems() {
-			let items = this.foundItems;
-			
-			// 按分类筛选
-			if (this.selectedCategory) {
-				items = items.filter(item => item.category === this.selectedCategory);
-			}
-			
-			// 按时间排序
-			items = [...items].sort((a, b) => {
+			// 分类筛选统一走后端，理由同 filteredLostItems
+			const items = [...this.foundItems].sort((a, b) => {
 				const timeA = new Date(a.found_time).getTime();
 				const timeB = new Date(b.found_time).getTime();
 				return this.sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
 			});
-			
+
 			// 不再在计算属性中进行关键词搜索，而是在 handleSearch 方法中处理
-			
+
 			return items;
 		},
 		
@@ -611,8 +599,8 @@ export default {
 				
 				// 并行加载数据
 				await Promise.all([
-					this.getLostItems({ page: this.page, page_size: this.pageSize }),
-					this.getFoundItems({ page: this.page, page_size: this.pageSize }),
+					this.getLostItems({ page: this.page, size: this.pageSize }),
+					this.getFoundItems({ page: this.page, size: this.pageSize }),
 					this.getCarouselImages()
 				]);
 				
@@ -891,7 +879,7 @@ export default {
 					if (activeTab === 'lost') {
 						res = await this.$api.lostItem.getList({
 							page: this.page,
-							page_size: this.pageSize
+							size: this.pageSize
 						});
 
 						if (res.items && res.items.length > 0) {
@@ -902,7 +890,7 @@ export default {
 					} else {
 						res = await this.$api.foundItem.getList({
 							page: this.page,
-							page_size: this.pageSize
+							size: this.pageSize
 						});
 
 						if (res.items && res.items.length > 0) {

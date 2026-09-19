@@ -5,6 +5,13 @@ import { BASE_URL } from '@/config';
 // 令牌过期前的刷新阈值(秒)
 const TOKEN_REFRESH_THRESHOLD = 300; // 5分钟
 
+// 刷新失败重试参数：令牌进入最后5分钟后若刷新遇到非认证类失败(网络错误/5xx/429)，
+// 过期时间不变会导致按过期时间算出的 delay 恒为 0，若失败后仍无条件自续定时器，
+// 会形成 setTimeout(0) 疯狂重试 /common/refresh 的死循环，故引入指数退避
+const REFRESH_RETRY_BASE_DELAY = 5 * 1000;   // 首次重试间隔基数 5 秒
+const REFRESH_RETRY_MAX_DELAY = 300 * 1000;  // 重试间隔上限 5 分钟
+const REFRESH_RETRY_MAX_ATTEMPTS = 5;        // 连续失败达到该次数后停止定时器
+
 /**
  * 纯JS实现的base64解码（不依赖 atob）
  * 微信小程序 / App(JSCore) 端没有 atob 全局函数，必须自行解码
@@ -120,6 +127,78 @@ async function refreshTokenSingleton() {
 
 // 自动刷新令牌的定时器ID
 let autoRefreshTimerId = null;
+// 刷新令牌的连续失败计数（定时器自续路径专用）
+// 成功刷新后清零；任何外部重建定时器(登录成功/请求触发刷新成功/回前台)也会清零
+let refreshFailCount = 0;
+
+/**
+ * 判断刷新失败错误是否为认证类失败(401/刷新令牌失效)
+ * api.user.refreshToken 的 401 分支会清除本地 token/refreshToken 并跳转登录页，
+ * 此时继续重试毫无意义，应停止定时器，等待用户重新登录后由外部重建
+ * @param {*} error 刷新流程抛出的错误
+ * @returns {boolean}
+ */
+function isAuthRefreshError(error) {
+  // statusCode / code 字段直接匹配 401（覆盖 res.data 原样 reject、err 对象等形态）
+  if (error && (error.statusCode === 401 || error.code === 401)) return true;
+  // message 为字符串时兜底匹配 401 关键字
+  const msg = error && typeof error.message === 'string' ? error.message : '';
+  return msg.includes('401');
+}
+
+/**
+ * 停止自动刷新定时器（不重置退避计数，由调用方按语义决定）
+ */
+function stopAutoRefreshTimer() {
+  if (autoRefreshTimerId) {
+    clearTimeout(autoRefreshTimerId);
+    autoRefreshTimerId = null;
+  }
+}
+
+/**
+ * 定时器到期回调：尝试刷新令牌，并按结果决定后续调度
+ * 成功 → 清零计数并恢复正常"按过期时间提前300秒"调度；
+ * 401/认证失败 → 停止定时器（凭证已被 api 层清除，等待重新登录后外部重建）；
+ * 其他失败(网络/5xx/429) → 指数退避重试，连续失败达上限后停止
+ */
+async function autoRefreshTick() {
+  autoRefreshTimerId = null;
+  try {
+    // 再次检查令牌是否即将过期（可能已被并发刷新流程更新过）
+    if (isTokenExpiringSoon()) {
+      await refreshTokenSingleton();
+    }
+    // 刷新成功（或无需刷新）：清零计数，按过期时间恢复正常调度
+    refreshFailCount = 0;
+    setupAutoRefreshToken();
+  } catch (error) {
+    if (isAuthRefreshError(error)) {
+      // 401/认证失败：刷新令牌已失效，api 层已清除凭证并跳转登录页，
+      // 停止定时器，不再安排下一轮（重新登录后会由外部重建）
+      refreshFailCount = 0;
+      stopAutoRefreshTimer();
+      return;
+    }
+    // 非 401 失败(网络错误/5xx/429)：令牌与过期时间均未变化，
+    // 若无条件自续会因 delay 恒为 0 形成死循环，改用指数退避
+    refreshFailCount++;
+    if (refreshFailCount >= REFRESH_RETRY_MAX_ATTEMPTS) {
+      // 连续失败达到上限，停止定时器；后续由请求触发 401 刷新等场景自然重建
+      refreshFailCount = 0;
+      stopAutoRefreshTimer();
+      return;
+    }
+    // 下一轮延时 = min(base * 2^n, max)，n 为当前连续失败次数
+    const backoffDelay = Math.min(
+      REFRESH_RETRY_BASE_DELAY * Math.pow(2, refreshFailCount - 1),
+      REFRESH_RETRY_MAX_DELAY
+    );
+    // 退避路径保留失败计数（不走 setupAutoRefreshToken，避免其清零计数）
+    stopAutoRefreshTimer();
+    autoRefreshTimerId = setTimeout(autoRefreshTick, backoffDelay);
+  }
+}
 
 /**
  * 设置自动刷新令牌的定时器
@@ -127,36 +206,24 @@ let autoRefreshTimerId = null;
  */
 function setupAutoRefreshToken() {
   // 清除之前的定时器
-  if (autoRefreshTimerId) {
-    clearTimeout(autoRefreshTimerId);
-    autoRefreshTimerId = null;
-  }
-  
+  stopAutoRefreshTimer();
+
+  // 外部重建定时器意味着拿到了新令牌或登录态恢复，重置退避计数
+  refreshFailCount = 0;
+
   // 检查是否有令牌
   const token = uni.getStorageSync('token');
   if (!token) return;
-  
-  // 获取令牌过期时间(秒)
+
+  // 获取令牌过期时间(秒)，无有效令牌时不安排刷新
   const expiryTime = getTokenExpiryTime();
   if (expiryTime <= 0) return;
-  
+
   // 计算下次刷新时间(提前阈值时间刷新)
   const refreshDelay = Math.max(0, (expiryTime - TOKEN_REFRESH_THRESHOLD) * 1000);
-  
+
   // 设置定时器
-  autoRefreshTimerId = setTimeout(async () => {
-    try {
-      // 再次检查令牌是否即将过期
-      if (isTokenExpiringSoon()) {
-        await refreshTokenSingleton();
-      }
-    } catch (error) {
-      // 刷新失败，下次应用启动时会再次尝试
-    } finally {
-      // 无论成功失败，都重新设置定时器
-      setupAutoRefreshToken();
-    }
-  }, refreshDelay);
+  autoRefreshTimerId = setTimeout(autoRefreshTick, refreshDelay);
 }
 
 // 初始化自动刷新令牌

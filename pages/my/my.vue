@@ -195,6 +195,7 @@ import { mapState, mapActions } from 'vuex';
 import { BASE_URL } from '@/config';
 import { COLOR_PRIMARY, COLOR_PRIMARY_LIGHT, COLOR_SUCCESS, COLOR_WARNING, COLOR_ERROR, COLOR_GREY, COLOR_SECONDARY } from '@/config/ui';
 import socketIOService from '@/utils/socketio.js';
+import { updateMessageBadge } from '@/utils/common.js';
 import request from '@/utils/request';
 
 export default {
@@ -362,6 +363,10 @@ export default {
             this.logout();
             // 清除本地存储中的登录凭证（token/refreshToken 由 store 的 CLEAR_USER_INFO 清除）
             uni.removeStorageSync('userInfo');
+
+            // 清除"消息"tabBar 未读角标：该账号的未读数不应带到下次登录（C13），
+            // updateMessageBadge(0) 内部走 removeTabBarBadge({ index: 2 })，与设置角标对称
+            updateMessageBadge(0);
 
             uni.showToast({
               title: '已退出登录',

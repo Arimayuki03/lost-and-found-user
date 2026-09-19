@@ -23,33 +23,36 @@
       
       <!-- 消息列表：定位完成前保持隐藏，避免"先渲染顶部再跳到底部"的抖动 -->
       <view class="message-list" :style="{ visibility: listVisible ? 'visible' : 'hidden' }">
-        <block v-for="(item, index) in messages" :key="index">
+        <!-- :key 使用每条消息创建时补齐的稳定唯一 _key（见 ensureMessageKey），
+             历史消息头插（unshift）时避免 index 复用节点导致发送中/失败/已读状态串位（M11） -->
+        <block v-for="(item, index) in messages" :key="item._key">
           <!-- 显示时间，如果是第一条消息或者与上一条消息时间间隔超过5分钟 -->
           <view class="time-divider" v-if="index === 0 || shouldShowTime(item, messages[index-1])">
             <text class="time-text">{{ formatTimeForDivider(item.timestamp) }}</text>
           </view>
           
-          <!-- 消息项 -->
-          <view
-            class="message-item"
-            :class="{ 'message-self': isSelfMessage(item) }"
-            :id="'msg-' + item.id"
-          >
-            <image
-              class="message-avatar"
-              :src="getAvatarUrl(item)"
-              mode="aspectFill"
-            ></image>
-            <view class="message-content-wrapper">
-              <view class="message-bubble">
-                <text class="message-content">{{ item.message }}</text>
+            <!-- 消息项：失败消息可点击重发（retryMessage 内部按 send_failed 守卫，其余点击无效） -->
+            <view
+              class="message-item"
+              :class="{ 'message-self': isSelfMessage(item) }"
+              :id="'msg-' + item.id"
+              @tap="retryMessage(item)"
+            >
+              <image
+                class="message-avatar"
+                :src="getAvatarUrl(item)"
+                mode="aspectFill"
+              ></image>
+              <view class="message-content-wrapper">
+                <view class="message-bubble">
+                  <text class="message-content">{{ item.message }}</text>
+                </view>
+                <!-- 发送状态：仅自己发送的消息显示（发送中/发送失败/已读/未读） -->
+                <text class="message-status" :class="{ 'message-status-failed': item.send_failed }" v-if="isSelfMessage(item)">
+                  {{ item.is_sending ? '发送中...' : (item.send_failed ? '发送失败，点击重发' : (item.is_read ? '已读' : '未读')) }}
+                </text>
               </view>
-              <!-- 发送状态：仅自己发送的消息显示（发送中/发送失败/已读/未读） -->
-              <text class="message-status" v-if="isSelfMessage(item)">
-                {{ item.is_sending ? '发送中...' : (item.send_failed ? '发送失败' : (item.is_read ? '已读' : '未读')) }}
-              </text>
             </view>
-          </view>
         </block>
       </view>
       
@@ -92,6 +95,10 @@ import socketIOService from '@/utils/socketio.js'; // 引入Socket.IO服务
 const POSITION_STORAGE_KEY = 'chat_read_position_v1';
 // 恢复锚点时最多向前翻页的页数，防止极老锚点导致进入会话时长时间连续请求
 const RESTORE_PAGE_LIMIT = 5;
+
+// 消息唯一 key 生成器：本地临时消息与后端回发 temp_id 对齐共用此格式（M14），
+// 加随机段避免同一毫秒内两条消息（重发场景）撞 key
+const generateTempId = () => 'temp-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
 
 export default {
   data() {
@@ -372,9 +379,12 @@ export default {
         }
         
         // 设置消息列表（按时间升序）
-        this.messages = allMessages.sort((a, b) => {
-          return this.parseTime(a.timestamp) - this.parseTime(b.timestamp);
-        });
+        this.messages = allMessages
+          // 为每条历史消息补齐渲染用唯一 key（后端消息无此字段），头插翻页时 :key 才稳定
+          .map(m => this.ensureMessageKey(m))
+          .sort((a, b) => {
+            return this.parseTime(a.timestamp) - this.parseTime(b.timestamp);
+          });
         
         // 设置是否有更多消息；loadMoreMessages 会先 offset += limit 再请求，这里回退一页
         this.hasMoreMessages = hasMore;
@@ -502,12 +512,12 @@ export default {
       if (uni && uni.hideToast) {
         uni.hideToast();
       }
-      
+
       // 如果消息不包含必要字段，则忽略
       if (!data || !data.id || !data.sender_id || !data.receiver_id) {
         return;
       }
-      
+
       // 检查是否是当前聊天的消息：发送/接收双方必须恰好是 {当前用户, 聊天对象}
       // （修复：原判断前两个条件重复，且缺少"接收方是自己"的校验）
       const sid = data.sender_id !== undefined && data.sender_id !== null ? data.sender_id.toString() : '';
@@ -550,8 +560,8 @@ export default {
       });
 
       if (!messageExists) {
-        // 添加到消息列表
-        this.messages.push(data);
+        // 添加到消息列表（补齐渲染用唯一 key，保持 :key 稳定）
+        this.messages.push(this.ensureMessageKey(data));
 
         // 如果不是自己发的，则标记为已读
         if (this.currentUser && sid !== mid) {
@@ -605,8 +615,10 @@ export default {
       
       // 创建本地消息对象
       const messageText = this.inputMessage.trim();
-      const tempId = 'temp-' + Date.now();
-      
+      // 临时ID与 socketio.js 的 message_sent 回执 temp_id 共用同一生成器（M14），
+      // 回执到达时按 temp_id 精确匹配本条消息
+      const tempId = generateTempId();
+
       const tempMessage = {
         id: tempId,
         sender_id: this.currentUser.id,
@@ -619,7 +631,7 @@ export default {
       };
       
       // 添加到本地消息列表
-      this.messages.push(tempMessage);
+      this.messages.push(this.ensureMessageKey(tempMessage));
       
       // 清空输入框
       this.inputMessage = '';
@@ -628,8 +640,9 @@ export default {
       this.scrollToBottom();
       
       try {
-        // 使用Socket.IO发送消息
-        const socketSuccess = socketIOService.sendMessage(receiverId, messageText);
+        // 使用Socket.IO发送消息；tempId 一并传给 socket 层，
+        // 供 message_sent 回执按 temp_id 精确匹配这条"发送中"的消息
+        const socketSuccess = socketIOService.sendMessage(receiverId, messageText, tempId);
 
         // 如果Socket.IO连接不可用，则使用HTTP API发送
         // （修复：$api 顶层不存在 sendMessage，正确入口是 $api.message.sendMessage）
@@ -638,7 +651,7 @@ export default {
             receiver_id: receiverId,
             message: messageText
           });
-          
+
           if (response.success) {
             // 更新临时消息ID为服务器返回的ID
             const index = this.messages.findIndex(m => m.id === tempId);
@@ -648,20 +661,62 @@ export default {
             }
           } else {
             // 标记为发送失败
-            const index = this.messages.findIndex(m => m.id === tempId);
-            if (index !== -1) {
-              this.messages[index].is_sending = false;
-              this.messages[index].send_failed = true;
-            }
+            this.markMessageSendFailed(tempId);
           }
         }
       } catch (error) {
         // 标记为发送失败
-        const index = this.messages.findIndex(m => m.id === tempId);
-        if (index !== -1) {
-          this.messages[index].is_sending = false;
-          this.messages[index].send_failed = true;
+        this.markMessageSendFailed(tempId);
+      }
+    },
+
+    // 把指定临时ID的消息置为"发送失败"状态（供发送异常路径与 Socket 发送超时回调共用）
+    markMessageSendFailed(tempId) {
+      const index = this.messages.findIndex(m => m.id === tempId);
+      if (index !== -1) {
+        this.messages[index].is_sending = false;
+        this.messages[index].send_failed = true;
+      }
+    },
+
+    // 点击"发送失败"的气泡重发该消息：仅 send_failed 状态响应，其余点击无效。
+    // 重发复用原气泡：状态先复位为"发送中"，成功后由房间回显/message_sent 回执按 id 归位
+    async retryMessage(item) {
+      if (!item || !item.send_failed) return;
+
+      // 双重防线：输入校验与登录校验失败时保持失败态，用户可再次点击
+      const receiverId = item.receiver_id;
+      if (!this.currentUser || !this.currentUser.id || !receiverId || !item.message) {
+        return;
+      }
+
+      const tempId = item.id;
+
+      // 复位为发送中
+      item.is_sending = true;
+      item.send_failed = false;
+
+      try {
+        const socketSuccess = socketIOService.sendMessage(receiverId, item.message, tempId);
+
+        if (!socketSuccess) {
+          const response = await this.$api.message.sendMessage({
+            receiver_id: receiverId,
+            message: item.message
+          });
+
+          if (response.success) {
+            const index = this.messages.findIndex(m => m.id === tempId);
+            if (index !== -1) {
+              this.messages[index].id = response.message_id;
+              this.messages[index].is_sending = false;
+            }
+          } else {
+            this.markMessageSendFailed(tempId);
+          }
         }
+      } catch (error) {
+        this.markMessageSendFailed(tempId);
       }
     },
     
@@ -713,9 +768,9 @@ export default {
               msg.sender_avatar_url = this.targetUser.avatar_url;
             }
           });
-          
-          // 合并消息并按时间排序
-          this.messages = [...this.messages, ...newMessages].sort((a, b) => {
+
+          // 合并消息并按时间排序（新消息补齐唯一 key，保持 :key 稳定）
+          this.messages = [...this.messages, ...newMessages.map(m => this.ensureMessageKey(m))].sort((a, b) => {
             return this.parseTime(a.timestamp) - this.parseTime(b.timestamp);
           });
           
@@ -756,9 +811,10 @@ export default {
           // 记录当前第一条消息ID，用于加载后保持位置
           const firstMsgId = this.messages.length > 0 ? this.messages[0].id : null;
 
-          // 按ID去重后合并（offset 分页期间若有新消息到达，页边界可能重复）
+          // 按ID去重后合并（offset 分页期间若有新消息到达，页边界可能重复）；
+          // 头插的历史消息同样补齐唯一 key，避免 :key=index 时节点复用串状态
           const existingIds = new Set(this.messages.map(m => String(m.id)));
-          const olderMessages = res.messages.filter(m => !existingIds.has(String(m.id)));
+          const olderMessages = res.messages.filter(m => !existingIds.has(String(m.id))).map(m => this.ensureMessageKey(m));
 
           // 合并消息并排序
           this.messages = [...olderMessages, ...this.messages].sort((a, b) => {
@@ -816,6 +872,20 @@ export default {
       }).exec();
     },
     
+    // 为消息补齐渲染用唯一 key（_key）：服务端消息无此字段，进入本列表的每条消息
+    // 都必须经过这里，保证 v-for 的 :key 在历史消息头插时依然稳定（M11）
+    ensureMessageKey(message) {
+      if (!message) return message;
+      if (!message._key) {
+        // 优先复用已有临时ID（发送中的本地消息 id 即 temp-xxx），
+        // 服务端消息用其数据库 id，二者均不可能与其他消息重复
+        message._key = (message.id !== undefined && message.id !== null)
+          ? 'k-' + String(message.id)
+          : generateTempId();
+      }
+      return message;
+    },
+
     // 会话唯一键：chat:小ID-大ID（与后端房间名规则一致）
     roomKey() {
       const me = this.currentUser && this.currentUser.id;
@@ -1372,6 +1442,11 @@ export default {
   margin-top: 6rpx; /* 减少状态文本的上边距 */
   margin-right: 15rpx;
   line-height: 1;
+}
+
+/* 发送失败状态：红色提示文案，与整体气泡风格一致的轻量重发提示 */
+.message-status-failed {
+  color: $uni-color-error;
 }
 
 .input-area {
