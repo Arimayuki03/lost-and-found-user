@@ -11,7 +11,7 @@
 [![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-4.7-010101?logo=socketdotio&logoColor=white)](https://socket.io/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/Arimayuki03/lost_and_found_user?label=Release)](../../releases)
+[![Release](https://img.shields.io/github/v/release/Arimayuki03/lost-and-found-user?label=Release)](../../releases)
 
 </div>
 
@@ -25,9 +25,9 @@
 
 | 仓库 | 说明 | 默认端口 |
 | --- | --- | --- |
-| [lost-and-found](https://github.com/Arimayuki03/lost_and_found) | Flask 后端（API、Socket.IO、匹配算法、邮件通知） | 5000 |
-| [lost-and-found-user](https://github.com/Arimayuki03/lost_and_found_user) | **本项目**：用户端前端（uni-app Vue3，H5 / 微信小程序 / App） | 5173（CLI H5） |
-| [lost-and-found-admin](https://github.com/Arimayuki03/lost_and_found_admin) | 管理后台前端（Vue 3 + Element Plus） | 8001 |
+| [lost-and-found](https://github.com/Arimayuki03/lost-and-found) | Flask 后端（API、Socket.IO、匹配算法、邮件通知） | 5000 |
+| [lost-and-found-user](https://github.com/Arimayuki03/lost-and-found-user) | **本项目**：用户端前端（uni-app Vue3，H5 / 微信小程序 / App） | 5173（CLI H5） |
+| [lost-and-found-admin](https://github.com/Arimayuki03/lost-and-found-admin) | 管理后台前端（Vue 3 + Element Plus） | 8001 |
 
 ## ✨ 功能特性
 
@@ -55,14 +55,14 @@
 
 ## 🚀 快速开始
 
-> 前置条件：先按 [lost-and-found](https://github.com/Arimayuki03/lost_and_found)（后端）README 启动后端服务（默认 `http://127.0.0.1:5000`）。
+> 前置条件：先按 [lost-and-found](https://github.com/Arimayuki03/lost-and-found)（后端）README 启动后端服务（默认 `http://127.0.0.1:5000`）。
 
 ### 方式一：HBuilderX（推荐）
 
 1. 克隆仓库并用 HBuilderX 打开本项目目录：
 
    ```bash
-   git clone https://github.com/Arimayuki03/lost_and_found_user.git
+   git clone https://github.com/Arimayuki03/lost-and-found-user.git
    cd lost-and-found-user
    ```
 
@@ -97,7 +97,7 @@ H5 开发服务器固定运行在 <http://localhost:5173>，并监听 `0.0.0.0`�
 ## 🏗️ 项目结构
 
 ```text
-lost_and_found_user/
+lost-and-found-user/
 ├── App.vue                     # 应用入口（生命周期钩子，冷启动恢复登录态）
 ├── main.js                     # 启动文件，注册全局 API / 工具 / Store
 ├── manifest.json               # 应用配置（App、小程序各端打包配置）
