@@ -26,7 +26,7 @@
 | 仓库 | 说明 | 默认端口 |
 | --- | --- | --- |
 | [lost_and_found](https://github.com/Arimayuki03/lost_and_found) | Flask 后端（API、Socket.IO、匹配算法、邮件通知） | 5000 |
-| [lost_and_found_user](https://github.com/Arimayuki03/lost_and_found_user) | **本项目**：用户端前端（uni-app Vue3，H5 / 微信小程序 / App） | — |
+| [lost_and_found_user](https://github.com/Arimayuki03/lost_and_found_user) | **本项目**：用户端前端（uni-app Vue3，H5 / 微信小程序 / App） | 5173（CLI H5） |
 | [lost_and_found_admin](https://github.com/Arimayuki03/lost_and_found_admin) | 管理后台前端（Vue 3 + Element Plus） | 8001 |
 
 ## ✨ 功能特性
@@ -80,15 +80,17 @@
 
 ### 方式二：CLI（可选）
 
-CLI 构建由 `vite.config.js` 支撑（`@` 别名映射到项目根、补 `.vue` 扩展名解析），与 HBuilderX 编译行为一致。
+CLI 构建由 `vite.config.js` 支撑（`@` 别名映射到项目根、补 `.vue` 扩展名解析、显式引入 uni() 插件），与 HBuilderX 编译行为一致。
 
 ```bash
 npm install
-npm run dev:h5          # H5 开发
+npm run dev:h5          # H5 开发（固定端口 5173，host 0.0.0.0）
 npm run dev:mp-weixin   # 微信小程序开发（产物导入微信开发者工具）
-npm run build:h5        # H5 生产构建
+npm run build:h5        # H5 生产构建（产物在 dist/build/h5/）
 npm run build:mp-weixin # 微信小程序生产构建
 ```
+
+H5 开发服务器固定运行在 <http://localhost:5173>，并监听 `0.0.0.0`——手机与电脑连同一局域网时，可通过 `http://<电脑局域网IP>:5173` 在真机上直接访问（此时后端地址需把 `config/index.js` 的 `DEV_LAN_BASE_URL` 填为 `http://<电脑局域网IP>:5000`）。该端口仅对 CLI H5 生效：微信小程序 / App 端不经 HTTP 端口，HBuilderX「运行到浏览器」使用其内置服务器（默认 8080）。
 
 > ⚠️ 生产部署前必须在 `config/index.js` 填写 `PROD_BASE_URL`（线上 HTTPS 地址），为空时生产构建会在启动阶段显式报错兜底。
 
