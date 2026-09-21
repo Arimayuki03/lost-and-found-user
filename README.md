@@ -1,16 +1,45 @@
-# 校园失物招领 · 用户端（lost-and-found-user）
+<div align="center">
+
+# 📱 校园失物招领 · 用户端
+
+**基于 uni-app（Vue 3）的校园失物招领平台用户端，一套代码兼容 H5 / 微信小程序 / App**
+
+失物/招领发布 · 多条件检索 · Socket.IO 实时私信 · 多端兼容
+
+[![uni-app](https://img.shields.io/badge/uni--app-Vue%203-2B9939?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyIDJhMTAgMTAgMCAxIDAgMTAgMTBBMTAgMTAgMCAwIDAgMTIgMnoiIGZpbGw9IiNmZmYiLz48L3N2Zz4=&logoColor=white)](https://uniapp.dcloud.net.cn/)
+[![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vuedotjs&logoColor=white)](https://vuejs.org/)
+[![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
+[![Socket.IO](https://img.shields.io/badge/Socket.IO-4.7-010101?logo=socketdotio&logoColor=white)](https://socket.io/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/tag/Arimayuki03/lost_and_found_user?label=Release)](../../releases)
+
+</div>
+
+---
+
+## 📖 简介
 
 基于 **uni-app（Vue 3）** 的校园失物招领平台**用户端**前端，一套代码兼容 **H5 / 微信小程序 / App** 多端。用户可以发布失物（丢失物品）与招领（捡到物品）信息，浏览、筛选、搜索他人发布的信息，并通过 Socket.IO 实时私信联系对方，尽快找回失物。
 
-本项目是「失物招领」三项目体系的一部分：
+## 📦 相关仓库
 
-| 项目 | 说明 |
-| --- | --- |
-| `lost_and_found` | Flask 后端（API、Socket.IO、匹配算法、邮件通知） |
-| **`lost_and_found_user`**（本项目） | 用户端前端（uni-app Vue3，H5 / 小程序 / App） |
-| `lost_and_found_admin` | 管理端 Web 前端（Vue 3 + Vite） |
+| 仓库 | 说明 | 默认端口 |
+| --- | --- | --- |
+| [lost_and_found](https://github.com/Arimayuki03/lost_and_found) | Flask 后端（API、Socket.IO、匹配算法、邮件通知） | 5000 |
+| [lost_and_found_user](https://github.com/Arimayuki03/lost_and_found_user) | **本项目**：用户端前端（uni-app Vue3，H5 / 微信小程序 / App） | — |
+| [lost_and_found_admin](https://github.com/Arimayuki03/lost_and_found_admin) | 管理后台前端（Vue 3 + Element Plus） | 8001 |
 
-## 技术栈
+## ✨ 功能特性
+
+- 🔍 **信息浏览与检索（首页）**：关键词搜索、轮播图、公告栏、分类导航（电子产品 / 证件 / 钱包 / 钥匙 / 书籍 / 衣物 / 饰品）、失物 / 招领双标签列表，支持类型、分类（含自定义分类）、名称、地点、状态、发布者、时间范围等多条件组合筛选与上拉加载更多。
+- 📝 **发布（失物 / 招领）**：双 Tab 独立表单——名称、分类、时间、地点、联系方式、描述（300 字计数）、图片上传；发布图片自动进行违规内容识别；未登录时引导登录 / 注册。
+- 🔄 **详情与流转**：物品完整信息与状态标签展示；非本人发布可一键「联系发布者」进入私信；本人发布可「确认已找到 / 确认已归还」、重新发布、编辑、删除。
+- 💬 **实时私信**：联系人列表与未读数、历史消息分页加载、Socket.IO 实时收发消息、消息已读回执、在线状态、发送失败重试。
+- 👤 **个人中心**：头像更换（拍照 / 相册）、资料编辑、密码修改、更换绑定邮箱（邮箱验证码）、我的发布管理、意见反馈、关于我们、退出登录。
+- 🔐 **认证体系**：注册（学号 + 邮箱查重 + 邮箱验证码）、登录、邮箱验证码重置密码；JWT 双令牌（access + refresh）自动刷新与 401 静默重试。
+- 🧩 **辅助页面**：公告列表 / 详情、失物 / 拾物编辑、通用输入对话框；统一的空状态、加载更多、状态标签组件。
+
+## 🧰 技术栈
 
 | 类别 | 技术 / 版本 |
 | --- | --- |
@@ -24,23 +53,19 @@
 
 > 版本以 `package.json` 为准；使用 HBuilderX 开发时，其内置 uni-app 编译器也可直接运行本项目，npm 依赖主要服务于 CLI 方式构建与 Socket.IO、uni-ui 等运行时依赖。
 
-## 功能特性
+## 🚀 快速开始
 
-- **信息浏览与检索（首页）**：关键词搜索、轮播图、公告栏、分类导航（电子产品 / 证件 / 钱包 / 钥匙 / 书籍 / 衣物 / 饰品）、失物 / 招领双标签列表，支持类型、分类（含自定义分类）、名称、地点、状态、发布者、时间范围等多条件组合筛选与上拉加载更多。
-- **发布（失物 / 招领）**：双 Tab 独立表单——名称、分类、时间、地点、联系方式、描述（300 字计数）、图片上传；发布图片自动进行违规内容识别；未登录时引导登录 / 注册。
-- **详情与流转**：物品完整信息与状态标签展示；非本人发布可一键「联系发布者」进入私信；本人发布可「确认已找到 / 确认已归还」、重新发布、编辑、删除。
-- **实时私信**：联系人列表与未读数、历史消息分页加载、Socket.IO 实时收发消息、消息已读回执、在线状态。
-- **个人中心**：头像更换（拍照 / 相册）、资料编辑、密码修改、更换绑定邮箱（邮箱验证码）、我的发布管理、意见反馈、关于我们、退出登录。
-- **认证体系**：注册（学号 + 邮箱查重 + 邮箱验证码）、登录、邮箱验证码重置密码；JWT 双令牌（access + refresh）自动刷新与 401 静默重试。
-- **辅助页面**：公告列表 / 详情、失物 / 拾物编辑、通用输入对话框；统一的空状态、加载更多、状态标签组件。
-
-## 快速开始
-
-> 前置条件：先按 [lost_and_found](../lost_and_found)（后端）README 启动后端服务（默认 `http://127.0.0.1:5000`）。
+> 前置条件：先按 [lost_and_found](https://github.com/Arimayuki03/lost_and_found)（后端）README 启动后端服务（默认 `http://127.0.0.1:5000`）。
 
 ### 方式一：HBuilderX（推荐）
 
-1. 用 HBuilderX 打开本项目目录。
+1. 克隆仓库并用 HBuilderX 打开本项目目录：
+
+   ```bash
+   git clone https://github.com/Arimayuki03/lost_and_found_user.git
+   cd lost_and_found_user
+   ```
+
 2. 安装 npm 依赖（Socket.IO 客户端、uni-ui 等运行时依赖）：
 
    ```bash
@@ -65,11 +90,11 @@ npm run build:h5        # H5 生产构建
 npm run build:mp-weixin # 微信小程序生产构建
 ```
 
-> 生产部署前必须在 `config/index.js` 填写 `PROD_BASE_URL`（线上 HTTPS 地址），为空时生产构建会在启动阶段显式报错兜底。
+> ⚠️ 生产部署前必须在 `config/index.js` 填写 `PROD_BASE_URL`（线上 HTTPS 地址），为空时生产构建会在启动阶段显式报错兜底。
 
-## 项目结构
+## 🏗️ 项目结构
 
-```
+```text
 lost_and_found_user/
 ├── App.vue                     # 应用入口（生命周期钩子，冷启动恢复登录态）
 ├── main.js                     # 启动文件，注册全局 API / 工具 / Store
@@ -101,7 +126,7 @@ lost_and_found_user/
 └── static/                     # 静态资源（logo、tabBar 图标、空状态插图）
 ```
 
-## 页面与功能模块
+## 📄 页面与功能模块
 
 ### 底部导航（tabBar）
 
@@ -126,7 +151,7 @@ lost_and_found_user/
 | 反馈 | `pages/feedback/feedback` | 提交并查看历史反馈 |
 | 辅助 | `pages/announcement/`、`pages/edit/`、`pages/common/input-dialog` | 公告列表 / 详情、失物 / 拾物编辑、通用输入对话框 |
 
-## API 与认证机制
+## 🔌 API 与认证机制
 
 ### 接口封装
 
@@ -153,16 +178,16 @@ lost_and_found_user/
 - 发送失败的消息在聊天页标记为「发送失败，点击重发」，可点击气泡重试。
 - 自动重连（最多 5 次）、连接超时重试、页面活跃状态管理。
 
-## 状态管理（store/index.js）
+## 🗃️ 状态管理（store/index.js）
 
 - `state`：用户信息、登录态、失物/招领列表、聊天列表、公告、轮播图。
 - `actions`：登录（保存双 token + 拉取用户信息）、注册、重置密码、验证码、资料/头像/邮箱更新、退出登录、各类列表加载、token 刷新、反馈提交。
 - `getters`：对外只读访问。
 
-## 贡献
+## 🤝 贡献
 
-欢迎提交 Issue 与 Pull Request，贡献流程与规范请参阅 [CONTRIBUTING.md](CONTRIBUTING.md)。安全漏洞请勿公开提交，参见 [SECURITY.md](SECURITY.md)。
+欢迎提交 Issue 与 Pull Request！贡献流程与规范请参阅 [CONTRIBUTING.md](CONTRIBUTING.md)。安全漏洞请勿公开提交，参见 [SECURITY.md](SECURITY.md)。
 
-## License
+## 📄 License
 
-本项目基于 [MIT License](LICENSE) 开源。
+[MIT](LICENSE) © 2026-Present Arimayuki03
