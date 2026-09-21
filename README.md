@@ -25,9 +25,9 @@
 
 | 仓库 | 说明 | 默认端口 |
 | --- | --- | --- |
-| [lost_and_found](https://github.com/Arimayuki03/lost_and_found) | Flask 后端（API、Socket.IO、匹配算法、邮件通知） | 5000 |
-| [lost_and_found_user](https://github.com/Arimayuki03/lost_and_found_user) | **本项目**：用户端前端（uni-app Vue3，H5 / 微信小程序 / App） | 5173（CLI H5） |
-| [lost_and_found_admin](https://github.com/Arimayuki03/lost_and_found_admin) | 管理后台前端（Vue 3 + Element Plus） | 8001 |
+| [lost-and-found](https://github.com/Arimayuki03/lost_and_found) | Flask 后端（API、Socket.IO、匹配算法、邮件通知） | 5000 |
+| [lost-and-found-user](https://github.com/Arimayuki03/lost_and_found_user) | **本项目**：用户端前端（uni-app Vue3，H5 / 微信小程序 / App） | 5173（CLI H5） |
+| [lost-and-found-admin](https://github.com/Arimayuki03/lost_and_found_admin) | 管理后台前端（Vue 3 + Element Plus） | 8001 |
 
 ## ✨ 功能特性
 
@@ -55,7 +55,7 @@
 
 ## 🚀 快速开始
 
-> 前置条件：先按 [lost_and_found](https://github.com/Arimayuki03/lost_and_found)（后端）README 启动后端服务（默认 `http://127.0.0.1:5000`）。
+> 前置条件：先按 [lost-and-found](https://github.com/Arimayuki03/lost_and_found)（后端）README 启动后端服务（默认 `http://127.0.0.1:5000`）。
 
 ### 方式一：HBuilderX（推荐）
 
@@ -63,7 +63,7 @@
 
    ```bash
    git clone https://github.com/Arimayuki03/lost_and_found_user.git
-   cd lost_and_found_user
+   cd lost-and-found-user
    ```
 
 2. 安装 npm 依赖（Socket.IO 客户端、uni-ui 等运行时依赖）：
