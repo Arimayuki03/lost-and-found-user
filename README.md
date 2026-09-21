@@ -11,7 +11,7 @@
 [![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-4.7-010101?logo=socketdotio&logoColor=white)](https://socket.io/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/tag/Arimayuki03/lost_and_found_user?label=Release)](../../releases)
+[![Release](https://img.shields.io/github/v/release/Arimayuki03/lost_and_found_user?label=Release)](../../releases)
 
 </div>
 
