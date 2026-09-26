@@ -88,7 +88,7 @@
 <script>
 
 import { mapState, mapGetters, mapMutations } from 'vuex';
-import { checkLogin, goToLogin, formatDate } from '../../utils/common';
+import { checkLogin, goToLogin, formatDate, updateMessageBadge } from '../../utils/common';
 import socketIOService from '@/utils/socketio.js'; // 引入Socket.IO服务
 
 // 会话阅读位置存储（微信行为：重新进入会话回到上次阅读位置，首次进入落在底部）
@@ -352,6 +352,8 @@ export default {
         // 失败不阻断加载流程，后续逐条 markNewMessagesAsRead 仍会兜底。
         try {
           await this.$api.message.markConversationAsRead(this.targetUserId);
+          // 进入会话已把后端未读清零，tabBar 角标同步清零，避免返回后角标与实际未读不一致
+          updateMessageBadge(0);
         } catch (markError) {
           // 批量已读失败时静默，走原有逐条标记逻辑
         }
@@ -642,7 +644,10 @@ export default {
       try {
         // 使用Socket.IO发送消息；tempId 一并传给 socket 层，
         // 供 message_sent 回执按 temp_id 精确匹配这条"发送中"的消息
-        const socketSuccess = socketIOService.sendMessage(receiverId, messageText, tempId);
+        const socketSuccess = socketIOService.sendMessage(receiverId, messageText, tempId, {
+          // Socket 层超时（10 秒未收回执）/断线清队列时回调：把气泡从"发送中"置为"发送失败"，供用户点击重发
+          onFailed: () => this.markMessageSendFailed(tempId)
+        });
 
         // 如果Socket.IO连接不可用，则使用HTTP API发送
         // （修复：$api 顶层不存在 sendMessage，正确入口是 $api.message.sendMessage）
@@ -697,7 +702,10 @@ export default {
       item.send_failed = false;
 
       try {
-        const socketSuccess = socketIOService.sendMessage(receiverId, item.message, tempId);
+        const socketSuccess = socketIOService.sendMessage(receiverId, item.message, tempId, {
+          // Socket 层超时/断线清队列时回调：重发气泡从"发送中"回到"发送失败"状态，可再次点击重发
+          onFailed: () => this.markMessageSendFailed(tempId)
+        });
 
         if (!socketSuccess) {
           const response = await this.$api.message.sendMessage({

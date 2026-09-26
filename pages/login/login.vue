@@ -106,7 +106,10 @@ export default {
       
       try {
         // 调用登录接口
-        await this.login(this.form);
+        // 校验与提交使用同一份数据：学号首尾空格原样提交会导致登录失败，
+        // 且报错指向"密码错误"，难以排查；密码不 trim（空格可能是合法密码字符）
+        const payload = { ...this.form, student_id: (this.form.student_id || '').trim() };
+        await this.login(payload);
         
         // 登录成功
         uni.hideLoading();

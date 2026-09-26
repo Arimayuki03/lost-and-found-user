@@ -771,6 +771,13 @@ export default {
 			}
 		},
 		
+		// 按 id 去重过滤新到数据：switchTab/筛选重置只重置页码不清列表，
+		// 触底翻页可能把同一页数据二次拼入，追加前先剔除已存在的 id
+		dedupeById(existing, incoming) {
+			const existIds = new Set((existing || []).map(i => String(i.id)));
+			return (incoming || []).filter(i => !existIds.has(String(i.id)));
+		},
+
 		// 加载更多
 		async loadMore() {
 			if (!this.hasMore || this.isLoadingMore) return;
@@ -805,13 +812,13 @@ export default {
 					// 使用 tab 快照更新数据
 					if (activeTab === 'lost') {
 						if (res.items && res.items.length > 0) {
-							this.$store.commit('SET_LOST_ITEMS', [...this.lostItems, ...res.items]);
+							this.$store.commit('SET_LOST_ITEMS', [...this.lostItems, ...this.dedupeById(this.lostItems, res.items)]);
 						} else {
 							this.hasMore = false;
 						}
 					} else {
 						if (res.items && res.items.length > 0) {
-							this.$store.commit('SET_FOUND_ITEMS', [...this.foundItems, ...res.items]);
+							this.$store.commit('SET_FOUND_ITEMS', [...this.foundItems, ...this.dedupeById(this.foundItems, res.items)]);
 						} else {
 							this.hasMore = false;
 						}
@@ -831,7 +838,7 @@ export default {
 
 						if (res.items && res.items.length > 0) {
 							const newItems = res.items.map(item => ({...item, item_type: 'lost'}));
-							this.filteredItems = [...this.filteredItems, ...newItems];
+							this.filteredItems = [...this.filteredItems, ...this.dedupeById(this.filteredItems, newItems)];
 						} else {
 							this.hasMore = false;
 						}
@@ -840,7 +847,7 @@ export default {
 
 						if (res.items && res.items.length > 0) {
 							const newItems = res.items.map(item => ({...item, item_type: 'found'}));
-							this.filteredItems = [...this.filteredItems, ...newItems];
+							this.filteredItems = [...this.filteredItems, ...this.dedupeById(this.filteredItems, newItems)];
 						} else {
 							this.hasMore = false;
 						}
@@ -860,7 +867,7 @@ export default {
 						res = await this.$api.lostItem.sift(params);
 
 						if (res.items && res.items.length > 0) {
-							this.$store.commit('SET_LOST_ITEMS', [...this.lostItems, ...res.items]);
+							this.$store.commit('SET_LOST_ITEMS', [...this.lostItems, ...this.dedupeById(this.lostItems, res.items)]);
 						} else {
 							this.hasMore = false;
 						}
@@ -868,7 +875,7 @@ export default {
 						res = await this.$api.foundItem.sift(params);
 
 						if (res.items && res.items.length > 0) {
-							this.$store.commit('SET_FOUND_ITEMS', [...this.foundItems, ...res.items]);
+							this.$store.commit('SET_FOUND_ITEMS', [...this.foundItems, ...this.dedupeById(this.foundItems, res.items)]);
 						} else {
 							this.hasMore = false;
 						}
@@ -883,7 +890,7 @@ export default {
 						});
 
 						if (res.items && res.items.length > 0) {
-							this.$store.commit('SET_LOST_ITEMS', [...this.lostItems, ...res.items]);
+							this.$store.commit('SET_LOST_ITEMS', [...this.lostItems, ...this.dedupeById(this.lostItems, res.items)]);
 						} else {
 							this.hasMore = false;
 						}
@@ -894,7 +901,7 @@ export default {
 						});
 
 						if (res.items && res.items.length > 0) {
-							this.$store.commit('SET_FOUND_ITEMS', [...this.foundItems, ...res.items]);
+							this.$store.commit('SET_FOUND_ITEMS', [...this.foundItems, ...this.dedupeById(this.foundItems, res.items)]);
 						} else {
 							this.hasMore = false;
 						}

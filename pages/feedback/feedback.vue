@@ -186,8 +186,10 @@ export default {
       
       try {
         // 提交反馈
+        // 提交前对内容 trim：校验用 trim 值、提交也须用同一份，
+        // 否则首尾空格原样入库（不改 this.content 本身，避免输入框光标跳动）
         await this.$store.dispatch('submitFeedback', {
-          content: this.content
+          content: this.content.trim()
         });
         
         uni.hideLoading();

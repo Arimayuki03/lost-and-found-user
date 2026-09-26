@@ -446,11 +446,11 @@ export default {
           }
 
 
-          // 将英文类别转换为中文类别
+          // 将英文类别转换为中文类别（映射值必须落在 categories 枚举内，否则分类筛选永远查不到）
           const categoryMapping = {
             'Electronics': '电子产品',
             'Document': '证件',
-            'Wallet': '钱包/钱物',
+            'Wallet': '钱包',
             'Key': '钥匙',
             'Book': '书籍',
             'Clothing': '衣物'
@@ -572,7 +572,17 @@ export default {
       });
 
       // 调用发布接口
-      this.$api.lostItem.publish(this.lostForm)
+      // 提交前构造 trim 后的 payload：校验用 trim 值、提交也须用同一份，
+      // 否则首尾空格原样入库（不改 this.lostForm 本身，避免输入框光标跳动）
+      const payload = {
+        ...this.lostForm,
+        name: (this.lostForm.name || '').trim(),
+        category: (this.lostForm.category || '').trim(),
+        location: (this.lostForm.location || '').trim(),
+        contact: (this.lostForm.contact || '').trim(),
+        description: (this.lostForm.description || '').trim()
+      };
+      this.$api.lostItem.publish(payload)
         .then(() => {
           uni.hideLoading();
           this.submitting = false;
@@ -671,7 +681,17 @@ export default {
       });
 
       // 调用发布接口
-      this.$api.foundItem.publish(this.foundForm)
+      // 提交前构造 trim 后的 payload：校验用 trim 值、提交也须用同一份，
+      // 否则首尾空格原样入库（不改 this.foundForm 本身，避免输入框光标跳动）
+      const payload = {
+        ...this.foundForm,
+        name: (this.foundForm.name || '').trim(),
+        category: (this.foundForm.category || '').trim(),
+        location: (this.foundForm.location || '').trim(),
+        contact: (this.foundForm.contact || '').trim(),
+        description: (this.foundForm.description || '').trim()
+      };
+      this.$api.foundItem.publish(payload)
         .then(() => {
           uni.hideLoading();
           this.submitting = false;

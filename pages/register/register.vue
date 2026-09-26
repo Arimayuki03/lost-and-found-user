@@ -402,11 +402,13 @@ export default {
       
       try {
         // 调用注册接口
+        // 提交前对文本字段 trim：首尾空格原样入库会导致登录时输入不一致而失败；
+        // 密码不 trim（空格可能是合法密码字符）
         const registerData = {
-          name: this.form.name,
-          student_id: this.form.student_id,
-          email: this.form.email,
-          code: this.form.code,
+          name: (this.form.name || '').trim(),
+          student_id: (this.form.student_id || '').trim(),
+          email: (this.form.email || '').trim(),
+          code: (this.form.code || '').trim(),
           password: this.form.password,
           avatar_url: this.form.avatar_url
         };

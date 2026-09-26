@@ -1,6 +1,7 @@
 import store from '../store';
 import { forceLogout } from './auth';
 import { BASE_URL } from '@/config';
+import { sharedRefreshToken } from './refresh-token';
 
 // 令牌过期前的刷新阈值(秒)
 const TOKEN_REFRESH_THRESHOLD = 300; // 5分钟
@@ -108,21 +109,11 @@ function getCurrentUserId() {
   return payload ? payload.sub || payload.user_id : null;
 }
 
-// 刷新令牌的Promise缓存，用于避免多个请求同时触发刷新
-let refreshTokenPromise = null;
-
-/**
- * 单例模式刷新令牌，避免并发刷新请求
- * @returns {Promise} 刷新结果Promise
- */
+// 刷新令牌的统一入口已收敛到 utils/refresh-token.js 的 sharedRefreshToken：
+// request.js 与 api.js 此前各自维护互不感知的刷新单例，两栈请求并发时可对
+// /common/refresh 发起重复刷新；收敛后任何一路触发都复用同一条在途 Promise
 async function refreshTokenSingleton() {
-  if (!refreshTokenPromise) {
-    refreshTokenPromise = store.dispatch('refreshToken')
-      .finally(() => {
-        refreshTokenPromise = null;
-      });
-  }
-  return refreshTokenPromise;
+  return sharedRefreshToken();
 }
 
 // 自动刷新令牌的定时器ID
@@ -133,7 +124,7 @@ let refreshFailCount = 0;
 
 /**
  * 判断刷新失败错误是否为认证类失败(401/刷新令牌失效)
- * api.user.refreshToken 的 401 分支会清除本地 token/refreshToken 并跳转登录页，
+ * refresh-token.js 的 401 分支会调用 forceLogout 清除凭证并跳转登录页，
  * 此时继续重试毫无意义，应停止定时器，等待用户重新登录后由外部重建
  * @param {*} error 刷新流程抛出的错误
  * @returns {boolean}
@@ -144,6 +135,19 @@ function isAuthRefreshError(error) {
   // message 为字符串时兜底匹配 401 关键字
   const msg = error && typeof error.message === 'string' ? error.message : '';
   return msg.includes('401');
+}
+
+/**
+ * 判断是否为"本地无 refreshToken"导致的刷新失败
+ * refresh-token.js 在本地凭证缺失时 reject 字符串 '没有刷新令牌'，此时登录态已无法维持，
+ * 与 401 同属认证类失败，应走登出流程（区别于网络错误/5xx——那些只是暂时失败）
+ * @param {*} error 刷新流程抛出的错误
+ * @returns {boolean}
+ */
+function isNoRefreshTokenError(error) {
+  if (typeof error === 'string') return error.includes('没有刷新令牌');
+  const msg = error && typeof error.message === 'string' ? error.message : '';
+  return msg.includes('没有刷新令牌');
 }
 
 /**
@@ -277,8 +281,12 @@ const request = async (options, _retryCount = 0) => {
       // 刷新成功后，重新设置自动刷新定时器
       setupAutoRefreshToken();
     } catch (error) {
-      handleUnauthorized();
-      return Promise.reject({ message: '登录已过期' });
+      if (isAuthRefreshError(error) || isNoRefreshTokenError(error)) {
+        handleUnauthorized();
+        return Promise.reject({ message: '登录已过期' });
+      }
+      // 网络错误/5xx：保留登录态，不触发登出
+      return Promise.reject({ message: (error && error.message) || '网络异常，请稍后重试' });
     }
   }
   // 令牌即将过期且不是刷新或登录请求
@@ -356,9 +364,14 @@ const request = async (options, _retryCount = 0) => {
               // 刷新成功，重试请求（带重试计数，防止无限刷新循环）
               setupAutoRefreshToken();
               request(options, _retryCount + 1).then(resolve).catch(reject);
-            }).catch(() => {
-              handleUnauthorized();
-              reject({ message: '登录已过期' });
+            }).catch((error) => {
+              if (isAuthRefreshError(error) || isNoRefreshTokenError(error)) {
+                handleUnauthorized();
+                reject({ message: '登录已过期' });
+                return;
+              }
+              // 网络错误/5xx：保留登录态，不触发登出；本次请求以网络异常拒绝
+              reject({ message: (error && error.message) || '网络异常，请稍后重试' });
             });
           } else {
             // 刷新令牌请求本身返回401，直接拒绝
@@ -419,9 +432,15 @@ const uploadFile = async (options, _retryCount = 0) => {
       setupAutoRefreshToken();
     } catch (error) {
       if (isTokenExpired()) {
-        handleUnauthorized();
-        return Promise.reject({ message: '登录已过期' });
+        // 刷新失败且令牌已过期：仅认证类失败（401/凭证缺失）才登出；
+        // 网络错误/5xx 保留登录态，直接以网络异常拒绝本次上传
+        if (isAuthRefreshError(error) || isNoRefreshTokenError(error)) {
+          handleUnauthorized();
+          return Promise.reject({ message: '登录已过期' });
+        }
+        return Promise.reject({ message: (error && error.message) || '网络异常，请稍后重试' });
       }
+      // 令牌未完全过期：继续使用当前令牌上传
     }
   }
 
@@ -457,9 +476,14 @@ const uploadFile = async (options, _retryCount = 0) => {
           refreshTokenSingleton().then(() => {
             setupAutoRefreshToken();
             uploadFile(options, _retryCount + 1).then(resolve).catch(reject);
-          }).catch(() => {
-            handleUnauthorized();
-            reject({ message: '登录已过期' });
+          }).catch((error) => {
+            if (isAuthRefreshError(error) || isNoRefreshTokenError(error)) {
+              handleUnauthorized();
+              reject({ message: '登录已过期' });
+              return;
+            }
+            // 网络错误/5xx：保留登录态，不触发登出；本次上传以网络异常拒绝
+            reject({ message: (error && error.message) || '网络异常，请稍后重试' });
           });
         } else {
           let data = res.data;

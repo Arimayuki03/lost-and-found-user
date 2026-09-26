@@ -206,8 +206,18 @@ class SocketIOService {
           this.connecting = false;
           // 服务端房间随连接断开而失效，必须清空本地缓存，重连成功后重新加入
           this._joinedRooms = [];
-          // 断开时清空待确认发送队列的定时器（连接断了收不到回执，由页面侧标记失败/重发）
-          this._pendingSends.forEach((pending) => clearTimeout(pending.timer));
+          // 断开时清空待确认发送队列：连接断了收不到回执，
+          // 先逐个通知页面侧把"发送中"气泡标记为失败（带"连接断开"语义），再清空定时器与队列
+          this._pendingSends.forEach((pending, tempId) => {
+            clearTimeout(pending.timer);
+            if (typeof pending.onFailed === 'function') {
+              try {
+                pending.onFailed({ temp_id: tempId, error: '连接断开' });
+              } catch (e) {
+                // 业务回调异常不影响断线清理流程
+              }
+            }
+          });
           this._pendingSends.clear();
           // 注意：不要置空 this.socket —— 保留引用让 socket.io 内置重连继续工作，
           // 重连成功后会再次触发 connect → authenticate → joinRoom 重新入房
@@ -450,6 +460,13 @@ class SocketIOService {
       return new Promise((resolve, reject) => {
         // 注册与移除使用同一个具名函数引用，确保监听器一定会被清理
         const resultHandler = (data) => {
+          // 结果必须校验 room_name：'join_private_chat_result' 事件会触发所有已注册
+          // handler，并发加房时（如从会话 A 快速切到会话 B，A 的回执未到 B 已发出）
+          // 后端对 A 的结果会同时唤醒 A、B 两个 handler，不校验会把"未成功加入"的 B
+          // 错误标记为已加入（_joinedRooms 缓存错误，B 的私聊消息静默丢失）
+          if (!data || data.room_name !== roomName) {
+            return;
+          }
           clearTimeout(timeout);
           this.socket.off('join_private_chat_result', resultHandler);
 

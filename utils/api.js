@@ -1,45 +1,14 @@
 import { BASE_URL } from '@/config';
 import { forceLogout as unifiedForceLogout } from './auth';
+import { sharedRefreshToken } from './refresh-token';
 
 /**
- * 静默刷新 access token（单例，避免并发刷新）。
- * 只负责换发并保存新 token，不做过期跳转——由 request() 统一处理，避免重复弹窗/重复 reLaunch。
+ * 静默刷新 access token。
+ * 单例实现在 utils/refresh-token.js（与 utils/request.js 的 refreshTokenSingleton
+ * 共享同一条在途 Promise，两栈请求并发时不会对 /common/refresh 发起重复刷新）。
+ * 只负责换发并保存新 token，401 时走统一登出管道；不做过期跳转——由 request() 统一处理。
  */
-let refreshTokenPromise = null;
-const refreshOnce = () => {
-  if (refreshTokenPromise) return refreshTokenPromise;
-  const refreshToken = uni.getStorageSync('refreshToken');
-  if (!refreshToken) return Promise.reject('没有刷新令牌');
-  refreshTokenPromise = new Promise((resolve, reject) => {
-    uni.request({
-      url: BASE_URL + '/common/refresh',
-      method: 'POST',
-      header: {
-        'Authorization': 'Bearer ' + refreshToken,
-        'Content-Type': 'application/json'
-      },
-      success: (res) => {
-        if (res.statusCode >= 200 && res.statusCode < 300 && res.data && res.data.access_token) {
-          uni.setStorageSync('token', res.data.access_token);
-          if (res.data.refresh_token) {
-            uni.setStorageSync('refreshToken', res.data.refresh_token);
-          }
-          resolve(res.data);
-        } else {
-          reject(res);
-        }
-      },
-      fail: reject
-    });
-  });
-  // .finally 的返回值必须赋回单例变量（参照 request.js 的 refreshTokenSingleton 写法）：
-  // 原写法 `refreshTokenPromise.finally(...)` 的返回值被丢弃，刷新失败时该链上
-  // 的 rejection 无人处理，产生 unhandled rejection
-  refreshTokenPromise = refreshTokenPromise.finally(() => { refreshTokenPromise = null; });
-  return refreshTokenPromise;
-  // TODO: 本模块的 refreshOnce 与 utils/request.js 的 refreshTokenSingleton 是两套互不感知的
-  // 刷新单例，统一入口需改动两个模块的所有调用方，暂留待后续重构
-};
+const refreshOnce = () => sharedRefreshToken();
 
 /**
  * 统一请求方法
@@ -279,64 +248,13 @@ const api = {
     },
     
     /**
-     * 刷新授权令牌
+     * 刷新授权令牌（委托 utils/refresh-token.js 的共享单例）。
+     * 原实现是独立请求 + 内联旧版登出（只清 storage + toast + reLaunch，
+     * 不重置 Vuex、不关 Socket、不清角标），且与 request.js 的刷新单例互不感知；
+     * 现统一走共享单例：401 走 forceLogout 完整登出管道，登出竞态有快照校验防护。
      * @returns {Promise} 刷新结果
      */
-    refreshToken: () => {
-      const refreshToken = uni.getStorageSync('refreshToken');
-      if (!refreshToken) {
-        return Promise.reject('没有刷新令牌');
-      }
-      
-      return new Promise((resolve, reject) => {
-        uni.request({
-          url: BASE_URL + '/common/refresh',
-          method: 'POST',
-          header: {
-            'Authorization': 'Bearer ' + refreshToken,
-            'Content-Type': 'application/json'
-          },
-          success: (res) => {
-            if (res.statusCode >= 200 && res.statusCode < 300) {
-              if (res.data.access_token) {
-                // 保存新的access token
-                uni.setStorageSync('token', res.data.access_token);
-                // 如果有新的refresh token，也保存
-                if (res.data.refresh_token) {
-                  uni.setStorageSync('refreshToken', res.data.refresh_token);
-                }
-                resolve(res.data);
-              } else {
-                reject({ message: '刷新token失败' });
-              }
-            } else {
-              // 如果是401错误，说明refresh token已过期，需要重新登录
-              if (res.statusCode === 401) {
-                uni.removeStorageSync('token');
-                uni.removeStorageSync('refreshToken');
-                uni.showToast({
-                  title: '登录已过期，请重新登录',
-                  icon: 'none'
-                });
-                setTimeout(() => {
-                  const pages = getCurrentPages();
-                  const current = pages[pages.length - 1];
-                  if (!current || current.route !== 'pages/login/login') {
-                    uni.reLaunch({
-                      url: '/pages/login/login'
-                    });
-                  }
-                }, 1500);
-              }
-              reject(res.data);
-            }
-          },
-          fail: (err) => {
-            reject(err);
-          }
-        });
-      });
-    }
+    refreshToken: () => sharedRefreshToken()
   },
   
   /**

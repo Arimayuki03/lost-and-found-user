@@ -1,6 +1,6 @@
 {
   "name": "lost-and-found-user",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "校园失物招领平台用户端（uni-app Vue3）",
   "license": "MIT",
   "private": true,

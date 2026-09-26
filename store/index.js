@@ -2,6 +2,7 @@ import { createStore } from 'vuex';
 import api from '../utils/api.js';
 import { saveToken } from '../utils/common.js';
 import request from '../utils/request.js';
+import { sharedRefreshToken } from '../utils/refresh-token.js';
 
 /**
  * 创建Vuex状态管理实例
@@ -44,6 +45,12 @@ const store = createStore({
       state.isLoggedIn = false;
       uni.removeStorageSync('token');
       uni.removeStorageSync('refreshToken');
+      // 一并重置业务列表状态：登出后这些数据属上个账号，跨账号残留会泄露给下一个登录用户
+      // （carouselImages 为公共内容，保留不清）
+      state.lostItems = [];
+      state.foundItems = [];
+      state.chatList = [];
+      state.announcements = [];
     },
     
     // 设置失物列表
@@ -327,33 +334,14 @@ const store = createStore({
     },
     
     /**
-     * 刷新token
+     * 刷新token（统一走 utils/refresh-token.js 的共享单例）。
+     * 原实现先 api.user.refreshToken 再写回 storage，无"发起后是否已登出"的守卫：
+     * 刷新在途期间用户登出（凭证已清），返回后会把新令牌写回已登出设备，
+     * 登出语义被破坏。共享单例内部已做 refreshToken 快照校验，此处不再重复写回。
      * @returns {Promise} 刷新结果
      */
     async refreshToken() {
-      try {
-        const refreshToken = uni.getStorageSync('refreshToken');
-        if (!refreshToken) {
-          return Promise.reject('没有刷新令牌');
-        }
-        
-        const res = await api.user.refreshToken();
-        
-        if (res.access_token) {
-          // 保存新的access token
-          saveToken(res.access_token);
-          
-          // 如果响应中包含新的refresh token，也保存它
-          if (res.refresh_token) {
-            uni.setStorageSync('refreshToken', res.refresh_token);
-          }
-          
-          return res;
-        }
-        return Promise.reject(res);
-      } catch (error) {
-        return Promise.reject(error);
-      }
+      return sharedRefreshToken();
     },
     
     /**

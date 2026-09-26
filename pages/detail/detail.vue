@@ -318,12 +318,15 @@ export default {
 		
 		/**
 		 * 格式化日期时间
+		 * 兼容 "YYYY-MM-DD HH:mm:ss"（iOS JSCore 的 new Date 无法解析该格式，会得到
+		 * Invalid Date 并渲染成 "NaN-NaN-NaN"），空格替换为 T 后再解析（参照 chat.vue parseTime）
 		 * @param {string} timestamp - ISO格式的时间戳
 		 * @return {string} 格式化后的日期时间字符串
 		 */
 		formatDate(timestamp) {
 			if (!timestamp) return '未知';
-			const date = new Date(timestamp);
+			const date = new Date(String(timestamp).replace(/ /g, 'T'));
+			if (isNaN(date.getTime())) return '未知';
 			return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 		},
 		

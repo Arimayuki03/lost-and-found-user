@@ -12,6 +12,7 @@
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-4.7-010101?logo=socketdotio&logoColor=white)](https://socket.io/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/Arimayuki03/lost-and-found-user?label=Release)](../../releases)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue)](CHANGELOG.md)
 
 </div>
 
@@ -20,6 +21,8 @@
 ## 📖 简介
 
 基于 **uni-app（Vue 3）** 的校园失物招领平台**用户端**前端，一套代码兼容 **H5 / 微信小程序 / App** 多端。用户可以发布失物（丢失物品）与招领（捡到物品）信息，浏览、筛选、搜索他人发布的信息，并通过 Socket.IO 实时私信联系对方，尽快找回失物。
+
+> **v1.0.1**：全量代码审查后集中修复——令牌刷新收敛为共享单例（`utils/refresh-token.js`），双栈并发不再重复刷新；刷新遇网络错误/5xx 不再误登出；聊天消息超时/断线后可重发不再永久"发送中"；首页切 tab 触底加载按 id 去重；iOS 日期解析 NaN 修复；登出重置业务列表状态等。详见 [CHANGELOG](CHANGELOG.md)。
 
 ## 📦 相关仓库
 
@@ -117,6 +120,7 @@ lost-and-found-user/
 ├── utils/
 │   ├── api.js                  # 全量 API 封装（用户/失物/招领/消息/反馈/公告/轮播图）
 │   ├── auth.js                 # 登录态清理（退出/失效时的本地凭证统一清除）
+│   ├── refresh-token.js        # 令牌刷新共享单例（HTTP 与 uploadFile 双栈复用）
 │   ├── request.js              # 请求封装：JWT 自动刷新、401 处理、错误提示
 │   ├── socketio.js             # Socket.IO 单例服务（连接、认证、房间、消息事件）
 │   └── common.js               # 通用工具（日期格式化、相对时间、登录态检查等）
@@ -168,8 +172,9 @@ lost-and-found-user/
 
 - JWT 双令牌：access token + refresh token，存于本地存储（`token` / `refreshToken`）。
 - 请求前自动检查 token：已过期则先静默刷新再请求；即将过期（剩余 < 5 分钟）也会提前刷新；401 时自动刷新并重试一次。
-- 单例刷新（Promise 缓存）避免并发刷新；应用启动时通过 `setupAutoRefreshToken` 设置提前刷新的定时器。
-- 刷新失败按失败类型分流：401/认证失败停止定时器并走登出；网络错误 / 5xx / 429 等其他失败按指数退避重试（5s 起步、上限 5 分钟、连续 5 次后停止），避免 0 延迟死循环。
+- 刷新单例（`utils/refresh-token.js`）由 HTTP 请求与 `uploadFile` 上传双栈共享同一条在途 Promise，避免并发重复刷新；应用启动时通过 `setupAutoRefreshToken` 设置提前刷新的定时器。
+- 刷新失败按失败类型分流：401/认证失败停止定时器并走 `forceLogout` 完整登出；网络错误 / 5xx / 429 等其他失败按指数退避重试（5s 起步、上限 5 分钟、连续 5 次后停止），保留登录态提示重试，避免 0 延迟死循环。
+- 刷新在途期间登出的竞态会校验 refreshToken 快照，登出后新令牌不会被"复活"到已登出设备。
 - 刷新失败则清除本地登录态并跳转登录页。
 
 ### 实时通信（utils/socketio.js）
